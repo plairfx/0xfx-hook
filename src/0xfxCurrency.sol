@@ -17,7 +17,7 @@ contract Currency is ERC20 {
         string memory currencyCode
     ) ERC20(currencyName, currencyCode) {}
 
-    function mint(uint256 amount, uint256 receiver) external onlyVaultCheck {
+    function mint(uint256 amount, address receiver) external onlyVaultCheck {
         _mint(receiver, amount);
     }
 

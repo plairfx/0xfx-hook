@@ -4,5 +4,11 @@
       "name": "v1.16.2",
       "rev": "bf647bd6046f2f7da30d0c2bf435e5c76a780c1b"
     }
+  },
+  "lib/pyth-crosschain": {
+    "rev": "ec456fca86adf2ab451ef3622833097c2a36ab00"
+  },
+  "lib/v4-hooks-public": {
+    "rev": "f2aa843e266f8f9b34fdaf94ffb72eda5d9204f9"
   }
 }

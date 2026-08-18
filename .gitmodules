@@ -4,3 +4,6 @@
 [submodule "lib/v4-hooks-public"]
 	path = lib/v4-hooks-public
 	url = https://github.com/Uniswap/v4-hooks-public
+[submodule "lib/pyth-crosschain"]
+	path = lib/pyth-crosschain
+	url = https://github.com/pyth-network/pyth-crosschain

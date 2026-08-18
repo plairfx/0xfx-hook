@@ -9,8 +9,8 @@ contract CurrencyVault {
     event CurrencyInitialized(address indexed currency);
 
     error CurrencyNotActive();
-
     error CurrencyAlreadyActive();
+
     struct CurrencyInfo {
         uint256 currencyID;
         string currencyName;
@@ -46,7 +46,7 @@ contract CurrencyVault {
 
     // let it be similiar for the user?
     // if pyth pricing is unactive/ (weekend ) -> how do we do this?
-    //
+
     function withdraw() external {}
 
     // ERC1155 would make sense to handle multiple tokens in 1 simple pool,
