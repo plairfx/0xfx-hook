@@ -1,10 +1,13 @@
 // SDPX-License-Identifier: MIT
 
 import {Currency} from "./0xfxCurrency.sol";
+import {IPyth, IPythStructs} from "./interfaces/Pyth/IPyth.sol";
 
 pragma solidity 0.8.34;
 
 contract CurrencyVault {
+    IPyth pyth;
+
     event Deposited(address indexed user, uint256);
     event CurrencyInitialized(address indexed currency);
 
@@ -30,6 +33,10 @@ contract CurrencyVault {
     // if the price is not up to date we will not allow users to mint,
     // they can if they want purchase it through the open-market instead.
     // as everyone else can.
+
+    constructor(address pythAddress) {
+        pyth = IPyth(pythAddress);
+    }
 
     function deposit(uint256 cid) external {
         //  check currencyPair,
@@ -60,10 +67,13 @@ contract CurrencyVault {
 
         // call pyth oracle and test if it works! we can get the price back;
 
-        uint256 price;
+        PythStructs.Price price;
         // initialize the currency
-        c.currentPrice = price;
 
+        try price = pyth.getPriceNoOlderThan(c.pythFeedID, 60) {} catch {
+            revert();
+        }
+        c.currentPrice = price.price;
         Currency newToken = new Currency(c.currencyName, c.currencyCode);
         c.currencyAddr = address(newToken);
         currencies[c.currencyID] = c;
