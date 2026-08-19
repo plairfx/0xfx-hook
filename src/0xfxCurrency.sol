@@ -1,10 +1,13 @@
 // SDPX-License-Identifier: MIT
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {
+    ERC20Permit,
+    ERC20
+} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
 pragma solidity 0.8.34;
 
-contract Currency is ERC20 {
+contract Currency is ERC20Permit {
     error NotTheVault();
     address immutable CURRENCY_VAULT;
 
@@ -15,7 +18,7 @@ contract Currency is ERC20 {
     constructor(
         string memory currencyName,
         string memory currencyCode
-    ) ERC20(currencyName, currencyCode) {}
+    ) ERC20Permit("currencyName") ERC20(currencyName, currencyCode) {}
 
     function mint(uint256 amount, address receiver) external onlyVaultCheck {
         _mint(receiver, amount);

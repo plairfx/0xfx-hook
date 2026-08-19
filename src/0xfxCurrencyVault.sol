@@ -1,15 +1,28 @@
 // SDPX-License-Identifier: MIT
 
 import {Currency} from "./0xfxCurrency.sol";
+import {ICurrency} from "./interfaces/ICurrency.sol";
 import {IPyth, IPythStructs} from "./interfaces/Pyth/IPyth.sol";
+
+import {
+    ReentrancyGuardTransient
+} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+
+import {
+    SafeERC20
+} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 pragma solidity 0.8.34;
 
-contract CurrencyVault {
+contract CurrencyVault is ReentrancyGuardTransient {
     IPyth pyth;
+    ICurrency currency;
 
     event Deposited(address indexed user, uint256);
     event CurrencyInitialized(address indexed currency);
+
+    bytes immutable empty_signature;
 
     error CurrencyNotActive();
     error CurrencyAlreadyActive();
@@ -38,28 +51,33 @@ contract CurrencyVault {
         pyth = IPyth(pythAddress);
     }
 
-    function deposit(uint256 cid) external {
+    function deposit(
+        uint256 cid,
+        bytes memory signature
+    ) external nonReentrant {
         //  check currencyPair,
         require(currencies[cid].active, CurrencyNotActive());
+        CurrencyInfo memory ci = currencies[cid];
 
-        // getPool price and currentPrice from the pythOracle.
-        // the goal is to use the currentprice mostly to let it corralate a lot more through the real life price aswell.
+        // check signature
+        if (keccak256(signature) != keccak256(empty_signature)) {
+            (uint8 v, bytes32 r, bytes32 s) = getParsedSignature(signature);
+            ICurrency(ci.currencyAddr).permit(
+                owner,
+                spender,
+                value,
+                deadline,
+                v,
+                r,
+                s
+            );
+        }
+        // get updatedPyth price.
 
-        // Now getting the his tokens
-        // the user can choose to receive his token on the platform?
-        // or
         // do we mint it through his account.
     }
 
-    // let it be similiar for the user?
-    // if pyth pricing is unactive/ (weekend ) -> how do we do this?
-
-    function withdraw() external {}
-
-    // ERC1155 would make sense to handle multiple tokens in 1 simple pool,
-    // get the minting out of it -> and give an use case regarding this.
-
-    // probelm wiht erc6909, is uniswap doesnt support ?
+    function withdraw() external nonReentrant {}
 
     function initCurrency(CurrencyInfo memory c) external {
         // currency cannot be active
@@ -70,16 +88,20 @@ contract CurrencyVault {
         PythStructs.Price price;
         // initialize the currency
 
-        try price = pyth.getPriceNoOlderThan(c.pythFeedID, 60) {} catch {
+        try price = pyth.getPriceNoOlderThan(c.pythFeedID, 10) {} catch {
             revert();
         }
         c.currentPrice = price.price;
         Currency newToken = new Currency(c.currencyName, c.currencyCode);
         c.currencyAddr = address(newToken);
         currencies[c.currencyID] = c;
+
+        // implement the confidence part? of pyth seems ot be a topic interesting.
     }
 
-    // i dont think disabling a currency is a goal, but for future cases we can try implementing this.
-
-    // @Implement a signature for this, so we can use permit function.
+    function getParsedSignature(
+        bytes memory signature
+    ) public view returns (uint8, bytes32, bytes32) {
+        return ECDSA.parse(signature);
+    }
 }
