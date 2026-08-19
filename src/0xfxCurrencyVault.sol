@@ -2,7 +2,8 @@
 
 import {Currency} from "./0xfxCurrency.sol";
 import {ICurrency} from "./interfaces/ICurrency.sol";
-import {IPyth, IPythStructs} from "./interfaces/Pyth/IPyth.sol";
+import {IPyth, PythStructs} from "./interfaces/Pyth/IPyth.sol";
+// import {PythStructs} from "./interfaces/Pyth/PythStructs.sol";
 
 import {
     ReentrancyGuardTransient
@@ -19,8 +20,13 @@ contract CurrencyVault is ReentrancyGuardTransient {
     IPyth pyth;
     using SafeERC20 for ICurrency;
     ICurrency currency;
+    address owner;
     address immutable USDC;
 
+    modifier onlyVaultOwner() {
+        require(checkVaultOwner(), NotTheOwner());
+        _;
+    }
     event Deposited(
         address indexed user,
         uint256 amount,
@@ -34,11 +40,12 @@ contract CurrencyVault is ReentrancyGuardTransient {
     );
     event CurrencyInitialized(address indexed currency);
 
-    bytes immutable empty_signature;
+    bytes32 immutable empty_signature = keccak256(abi.encode(0));
 
     error CurrencyNotActive();
     error CurrencyAlreadyActive();
     error NotEnoughCurrencyBalance();
+    error NotTheOwner();
 
     struct CurrencyInfo {
         uint256 currencyID;
@@ -53,21 +60,24 @@ contract CurrencyVault is ReentrancyGuardTransient {
 
     mapping(uint256 currencyID => CurrencyInfo) currencies;
 
-    constructor(address pythAddress) {
+    constructor(address pythAddress, address usdc, address _owner) {
         pyth = IPyth(pythAddress);
+        USDC = usdc;
+        owner = _owner;
     }
 
     function deposit(
         uint256 cid,
         uint256 amount,
-        bytes memory signature
+        bytes memory signature,
+        uint256 deadline
     ) external nonReentrant {
         //  check currencyPair,
         require(currencies[cid].active, CurrencyNotActive());
         CurrencyInfo memory ci = currencies[cid];
 
         // check signature
-        if (keccak256(signature) != keccak256(empty_signature)) {
+        if (keccak256(signature) != empty_signature) {
             (uint8 v, bytes32 r, bytes32 s) = getParsedSignature(signature);
             ICurrency(ci.currencyAddr).permit(
                 msg.sender,
@@ -83,7 +93,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         uint256 price = uint256(getCurrentPrice(ci.pythFeedID));
 
         ICurrency(USDC).safeTransferFrom(msg.sender, address(this), amount);
-        ICurrency(ci.currencyAddr).mint((amount / price), receiver);
+        ICurrency(ci.currencyAddr).mint((amount / price), msg.sender);
 
         emit Deposited(msg.sender, amount, ci.currencyAddr);
     }
@@ -104,7 +114,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         emit Withdrawn(msg.sender, amount, ci.currencyAddr);
     }
 
-    function initCurrency(CurrencyInfo memory c) external {
+    function initCurrency(CurrencyInfo memory c) external onlyVaultOwner {
         // currency cannot be active
         require(!currencies[c.currencyID].active, CurrencyAlreadyActive());
 
@@ -114,6 +124,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         Currency newToken = new Currency(c.currencyName, c.currencyCode);
         c.currencyAddr = address(newToken);
         c.lastUpdated = block.timestamp;
+        c.active = true;
 
         currencies[c.currencyID] = c;
 
@@ -121,10 +132,13 @@ contract CurrencyVault is ReentrancyGuardTransient {
     }
 
     function getCurrentPrice(bytes32 feedID) internal view returns (int256) {
-        PythStructs.Price price;
+        PythStructs.Price memory price;
         // initialize the currency
 
-        try price = pyth.getPriceNoOlderThan(feedID, 10) {} catch {
+        try pyth.getPriceNoOlderThan(feedID, 10) {
+            // this can revert, so we have to think how to achieve this revert in this exmaple.
+            price = pyth.getPriceNoOlderThan(feedID, 20);
+        } catch {
             // @info, i assume with a stale price is reverts..
             // but lets confirm this byhand.
             revert();
@@ -143,5 +157,9 @@ contract CurrencyVault is ReentrancyGuardTransient {
         bytes memory signature
     ) public view returns (uint8, bytes32, bytes32) {
         return ECDSA.parse(signature);
+    }
+
+    function checkVaultOwner() internal view returns (bool) {
+        return owner == msg.sender;
     }
 }
