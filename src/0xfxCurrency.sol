@@ -17,8 +17,11 @@ contract Currency is ERC20Permit {
     }
     constructor(
         string memory currencyName,
-        string memory currencyCode
-    ) ERC20Permit("currencyName") ERC20(currencyName, currencyCode) {}
+        string memory currencyCode,
+        address currencyVault
+    ) ERC20Permit("currencyName") ERC20(currencyName, currencyCode) {
+        CURRENCY_VAULT = currencyVault;
+    }
 
     function mint(uint256 amount, address receiver) external onlyVaultCheck {
         _mint(receiver, amount);

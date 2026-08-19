@@ -2,7 +2,10 @@
 
 import {CurrencyVaultBase} from "./CurrencyVaultBase.t.sol";
 import {CurrencyVault} from "../../src/0xfxCurrencyVault.sol";
+import {ICurrency} from "../../src/interfaces/ICurrency.sol";
+import {IPyth, PythStructs} from "../../src/interfaces/Pyth/IPyth.sol";
 
+import {console} from "forge-std/console.sol";
 pragma solidity 0.8.34;
 
 contract CurrencyVaultTest is CurrencyVaultBase {
@@ -40,7 +43,98 @@ contract CurrencyVaultTest is CurrencyVaultBase {
             lastUpdated: 0,
             active: false
         });
-        vm.expectRevert("CurrencyAlreadyActive()"); // not predicting the addr..
+        vm.expectRevert("CurrencyAlreadyActive()");
         cv.initCurrency(C);
+    }
+
+    function test_InitializeCurrencyWithStalePriceReverts() public {
+        initializePyth();
+
+        // warp more than 60 seconds
+        vm.warp(2 minutes);
+        vm.startPrank(owner);
+        CurrencyVault.CurrencyInfo memory C = CurrencyVault.CurrencyInfo({
+            currencyID: 1,
+            currencyName: "EURO",
+            currencyCode: "EUR",
+            currencyAddr: address(0x0),
+            pythFeedID: EURUSD_PRICE_FEED_ID,
+            currentPrice: 0,
+            lastUpdated: 0,
+            active: false
+        });
+
+        // stalePrice revert.
+        vm.expectRevert();
+        cv.initCurrency(C);
+    }
+
+    // Deposit..
+
+    function test_Deposit() public {
+        initializePyth();
+        initializedCurrency();
+        mintAliceUSDC();
+
+        uint256 usdcBalanceAlice = usdc.balanceOf(alice);
+        uint256 EURBalanceAlice = ICurrency(
+            0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2
+        ).balanceOf(alice);
+        vm.startPrank(alice);
+
+        uint256 deadline = block.timestamp + 10 minutes;
+        uint256 amount = 10e6;
+        bytes memory signature = getDepositUSDCSignature(
+            Permit({
+                owner: alice,
+                spender: address(cv),
+                value: amount,
+                nonce: usdc.nonces(alice),
+                deadline: deadline
+            })
+        );
+
+        cv.deposit(1, amount, signature, deadline);
+
+        uint256 usdcBalanceAliceAfter = usdc.balanceOf(alice);
+        uint256 EURBalanceAliceAfter = ICurrency(
+            0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2
+        ).balanceOf(alice);
+
+        assertEq(usdcBalanceAlice - amount, usdcBalanceAliceAfter);
+        assertEq(
+            EURBalanceAlice + (amount / (116595 + 10)),
+            EURBalanceAliceAfter
+        );
+    }
+
+    // Withdraw...
+
+    function test_Withdraw() public {
+        address currencyAddr = 0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2;
+        aliceDeposited10USDCForEUR();
+
+        PythStructs.Price memory PP = pyth.getPriceNoOlderThan(
+            EURUSD_PRICE_FEED_ID,
+            60
+        );
+
+        uint256 usdcBalanceAlice = usdc.balanceOf(alice);
+        uint256 EURBalanceAlice = ICurrency(currencyAddr).balanceOf(alice);
+        uint256 amount = EURBalanceAlice; // i want to withdraw the whole balance!.
+
+        uint256 expectedUSDCAmount = amount * uint256(int256(PP.price));
+        vm.startPrank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit CurrencyVault.Withdrawn(alice, expectedUSDCAmount, currencyAddr);
+
+        cv.withdraw(1, amount);
+
+        uint256 usdcBalanceAliceAfter = usdc.balanceOf(alice);
+        uint256 EURBalanceAliceAfter = ICurrency(currencyAddr).balanceOf(alice);
+
+        // the maths dont add up here.
+        assertEq(usdcBalanceAlice + expectedUSDCAmount, usdcBalanceAliceAfter);
+        assertEq(EURBalanceAlice - EURBalanceAlice, EURBalanceAliceAfter);
     }
 }

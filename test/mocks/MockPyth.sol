@@ -6,7 +6,7 @@ import "./AbstractPyth.sol";
 import "../../src/interfaces/Pyth/PythUtils.sol";
 
 import "../../src/interfaces/Pyth/IPyth.sol";
-import "../../src/interfaces/Pyth/PythErrors.sol";
+import {PythErrors} from "../../src/interfaces/Pyth/PythErrors.sol";
 contract MockPyth is AbstractPyth {
     mapping(bytes32 => PythStructs.PriceFeed) priceFeeds;
 

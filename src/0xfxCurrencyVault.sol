@@ -79,7 +79,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         // check signature
         if (keccak256(signature) != empty_signature) {
             (uint8 v, bytes32 r, bytes32 s) = getParsedSignature(signature);
-            ICurrency(ci.currencyAddr).permit(
+            ICurrency(USDC).permit(
                 msg.sender,
                 address(this),
                 amount,
@@ -108,10 +108,11 @@ contract CurrencyVault is ReentrancyGuardTransient {
 
         uint256 price = uint256(getCurrentPrice(ci.pythFeedID));
 
+        // EUR -> USD
         ICurrency(ci.currencyAddr).burn(amount, msg.sender);
-        ICurrency(USDC).safeTransfer(msg.sender, amount);
+        ICurrency(USDC).safeTransfer(msg.sender, amount * price);
 
-        emit Withdrawn(msg.sender, amount, ci.currencyAddr);
+        emit Withdrawn(msg.sender, amount * price, ci.currencyAddr);
     }
 
     function initCurrency(CurrencyInfo memory c) external onlyVaultOwner {
@@ -121,7 +122,11 @@ contract CurrencyVault is ReentrancyGuardTransient {
         // call pyth oracle and test if it works! we can get the price back;
         c.currentPrice = uint256(getCurrentPrice(c.pythFeedID));
 
-        Currency newToken = new Currency(c.currencyName, c.currencyCode);
+        Currency newToken = new Currency(
+            c.currencyName,
+            c.currencyCode,
+            address(this)
+        );
         c.currencyAddr = address(newToken);
         c.lastUpdated = block.timestamp;
         c.active = true;
@@ -136,20 +141,13 @@ contract CurrencyVault is ReentrancyGuardTransient {
         // initialize the currency
 
         try pyth.getPriceNoOlderThan(feedID, 10) {
-            // this can revert, so we have to think how to achieve this revert in this exmaple.
+            // 20 seconds, we call this agian to save the price,
+            // as we do not know if the price will revert or not.
             price = pyth.getPriceNoOlderThan(feedID, 20);
         } catch {
-            // @info, i assume with a stale price is reverts..
-            // but lets confirm this byhand.
+            // reverts if updatedTime - block.timestamp is less than  - age we set.
             revert();
         }
-        // convert it to the right decimals...
-        // we always want to assume to upper part of the confidence,
-        // so if somebody wants to mint EUR, they need pay  oracle price + confidence.
-
-        // @Stale prices/ Weekend closes? how does that work? return a stale price?
-        // we have to check what a stale price is meant to be ..
-
         return price.price;
     }
 
