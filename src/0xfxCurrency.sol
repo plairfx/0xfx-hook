@@ -24,6 +24,10 @@ contract Currency is ERC20Permit {
         _mint(receiver, amount);
     }
 
+    function burn(uint256 amount, address user) external onlyVaultCheck {
+        _burn(user, amount);
+    }
+
     function onlyVault() internal view returns (bool) {
         return msg.sender == CURRENCY_VAULT;
     }

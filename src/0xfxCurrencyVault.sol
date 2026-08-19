@@ -17,35 +17,41 @@ pragma solidity 0.8.34;
 
 contract CurrencyVault is ReentrancyGuardTransient {
     IPyth pyth;
+    using SafeERC20 for ICurrency;
     ICurrency currency;
+    address immutable USDC;
 
-    event Deposited(address indexed user, uint256);
+    event Deposited(
+        address indexed user,
+        uint256 amount,
+        address indexed currency
+    );
+
+    event Withdrawn(
+        address indexed user,
+        uint256 amount,
+        address indexed currency
+    );
     event CurrencyInitialized(address indexed currency);
 
     bytes immutable empty_signature;
 
     error CurrencyNotActive();
     error CurrencyAlreadyActive();
+    error NotEnoughCurrencyBalance();
 
     struct CurrencyInfo {
         uint256 currencyID;
         string currencyName;
         string currencyCode;
         address currencyAddr;
-        uint256 pythFeedID;
+        bytes32 pythFeedID;
         uint256 currentPrice;
         uint256 lastUpdated;
         bool active;
     }
 
     mapping(uint256 currencyID => CurrencyInfo) currencies;
-    // the vault will support currencies,
-
-    // user can deposit USDC for any of the currencies avaliable,
-    // the pricing is powered through pyth oracle.
-    // if the price is not up to date we will not allow users to mint,
-    // they can if they want purchase it through the open-market instead.
-    // as everyone else can.
 
     constructor(address pythAddress) {
         pyth = IPyth(pythAddress);
@@ -53,6 +59,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
 
     function deposit(
         uint256 cid,
+        uint256 amount,
         bytes memory signature
     ) external nonReentrant {
         //  check currencyPair,
@@ -63,9 +70,9 @@ contract CurrencyVault is ReentrancyGuardTransient {
         if (keccak256(signature) != keccak256(empty_signature)) {
             (uint8 v, bytes32 r, bytes32 s) = getParsedSignature(signature);
             ICurrency(ci.currencyAddr).permit(
-                owner,
-                spender,
-                value,
+                msg.sender,
+                address(this),
+                amount,
                 deadline,
                 v,
                 r,
@@ -73,30 +80,63 @@ contract CurrencyVault is ReentrancyGuardTransient {
             );
         }
         // get updatedPyth price.
+        uint256 price = uint256(getCurrentPrice(ci.pythFeedID));
 
-        // do we mint it through his account.
+        ICurrency(USDC).safeTransferFrom(msg.sender, address(this), amount);
+        ICurrency(ci.currencyAddr).mint((amount / price), receiver);
+
+        emit Deposited(msg.sender, amount, ci.currencyAddr);
     }
 
-    function withdraw() external nonReentrant {}
+    function withdraw(uint256 cid, uint256 amount) external nonReentrant {
+        require(currencies[cid].active, CurrencyNotActive());
+        CurrencyInfo memory ci = currencies[cid];
+        require(
+            ICurrency(ci.currencyAddr).balanceOf(msg.sender) >= amount,
+            NotEnoughCurrencyBalance()
+        );
+
+        uint256 price = uint256(getCurrentPrice(ci.pythFeedID));
+
+        ICurrency(ci.currencyAddr).burn(amount, msg.sender);
+        ICurrency(USDC).safeTransfer(msg.sender, amount);
+
+        emit Withdrawn(msg.sender, amount, ci.currencyAddr);
+    }
 
     function initCurrency(CurrencyInfo memory c) external {
         // currency cannot be active
         require(!currencies[c.currencyID].active, CurrencyAlreadyActive());
 
         // call pyth oracle and test if it works! we can get the price back;
+        c.currentPrice = uint256(getCurrentPrice(c.pythFeedID));
 
+        Currency newToken = new Currency(c.currencyName, c.currencyCode);
+        c.currencyAddr = address(newToken);
+        c.lastUpdated = block.timestamp;
+
+        currencies[c.currencyID] = c;
+
+        emit CurrencyInitialized(address(newToken));
+    }
+
+    function getCurrentPrice(bytes32 feedID) internal view returns (int256) {
         PythStructs.Price price;
         // initialize the currency
 
-        try price = pyth.getPriceNoOlderThan(c.pythFeedID, 10) {} catch {
+        try price = pyth.getPriceNoOlderThan(feedID, 10) {} catch {
+            // @info, i assume with a stale price is reverts..
+            // but lets confirm this byhand.
             revert();
         }
-        c.currentPrice = price.price;
-        Currency newToken = new Currency(c.currencyName, c.currencyCode);
-        c.currencyAddr = address(newToken);
-        currencies[c.currencyID] = c;
+        // convert it to the right decimals...
+        // we always want to assume to upper part of the confidence,
+        // so if somebody wants to mint EUR, they need pay  oracle price + confidence.
 
-        // implement the confidence part? of pyth seems ot be a topic interesting.
+        // @Stale prices/ Weekend closes? how does that work? return a stale price?
+        // we have to check what a stale price is meant to be ..
+
+        return price.price;
     }
 
     function getParsedSignature(

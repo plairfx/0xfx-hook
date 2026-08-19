@@ -54,4 +54,7 @@ interface ICurrency is IERC20Metadata {
      */
     // solhint-disable-next-line func-name-mixedcase
     function DOMAIN_SEPARATOR() external view returns (bytes32);
+
+    function mint(uint256 amount, address receiver) external;
+    function burn(uint256 amount, address receiver) external;
 }
