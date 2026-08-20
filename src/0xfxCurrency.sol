@@ -5,14 +5,12 @@ import {
     ERC20
 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
-pragma solidity 0.8.34;
-
+pragma solidity ^0.8.22;
 contract Currency is ERC20Permit {
-    error NotTheVault();
     address immutable CURRENCY_VAULT;
 
     modifier onlyVaultCheck() {
-        require(onlyVault(), NotTheVault());
+        require(onlyVault(), "Not the Vault");
         _;
     }
     constructor(

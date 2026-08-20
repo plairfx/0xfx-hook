@@ -55,7 +55,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
 
     constructor(
         IPoolManager _IPM,
-        IERC20 _USDC
+        address _USDC
     ) BaseHook(_IPM) ERC20("0xfx Liquidity Token", "0xfxLT") {
         USDC = ICurrency(address(_USDC));
     }
@@ -65,8 +65,6 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
 
     uint256 liquidityUsed;
 
-    error CannotBeMoreThanMaxCooldown();
-    error CannotWithdrawYet();
     event Transferred(
         address indexed sender,
         address indexed receiver,
@@ -107,10 +105,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         bytes memory signature
     ) public nonReentrant returns (uint256 shares) {
         // checks
-        require(
-            USDC.balanceOf(msg.sender) >= usdcAmount,
-            Lib.NotEnoughBalance()
-        );
+        require(USDC.balanceOf(msg.sender) >= usdcAmount, "Not Enough Balance");
 
         (uint8 v, bytes32 r, bytes32 s) = Lib.getParsedSignature(signature);
 
@@ -146,10 +141,10 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         bytes memory signature
     ) external nonReentrant {
         // checks
-        require(balanceOf(msg.sender) >= shareAmount, Lib.NotEnoughBalance());
+        require(balanceOf(msg.sender) >= shareAmount, "Not Enough Balance");
         require(
             block.timestamp >= withdrawalCooldown[msg.sender],
-            CannotWithdrawYet()
+            "Cannot Withdraw Yet"
         );
 
         uint256 _assets = _convertToAssets(shareAmount);
@@ -166,7 +161,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     function changeCooldownPeriod(uint256 newCDPeriod) external {
         require(
             MAX_DEPOSIT_COOLDOWN >= newCDPeriod,
-            CannotBeMoreThanMaxCooldown()
+            "Cannot be more than MAX_CD"
         );
         uint256 oldCDPeriod = currentDepositCoolDown;
         currentDepositCoolDown = newCDPeriod;

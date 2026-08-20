@@ -5,7 +5,7 @@ import {USDC} from "../mocks/USDC.sol";
 import {MockPyth} from "../mocks/MockPyth.sol";
 import {CurrencyVault} from "../../src/0xfxCurrencyVault.sol";
 
-pragma solidity 0.8.34;
+pragma solidity ^0.8.22;
 
 contract CurrencyVaultBase is Test {
     MockPyth pyth;

@@ -6,7 +6,7 @@ import {ICurrency} from "../../src/interfaces/ICurrency.sol";
 import {IPyth, PythStructs} from "../../src/interfaces/Pyth/IPyth.sol";
 
 import {console} from "forge-std/console.sol";
-pragma solidity 0.8.34;
+pragma solidity ^0.8.22;
 
 contract CurrencyVaultTest is CurrencyVaultBase {
     address currencyAddr = 0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2;
@@ -25,7 +25,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
             lastUpdated: 0,
             active: false
         });
-        vm.expectRevert("NotTheOwner()");
+        vm.expectRevert("Not the owner");
 
         cv.initCurrency(C);
     }
@@ -45,7 +45,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
             lastUpdated: 0,
             active: false
         });
-        vm.expectRevert("CurrencyAlreadyActive()");
+        vm.expectRevert("Currency Already Active!");
         cv.initCurrency(C);
     }
 
@@ -108,7 +108,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
 
     function test_DepositRequiresActiveCurrency() public {
         vm.startPrank(alice);
-        vm.expectRevert("CurrencyNotActive()");
+        vm.expectRevert("Currency Not Active");
 
         cv.deposit(1, 100e6, empty_signature, 0);
     }
@@ -119,7 +119,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         mintAliceUSDC();
 
         vm.startPrank(alice);
-        vm.expectRevert("NotMoreThanZero()");
+        vm.expectRevert("Cant be Zero");
         cv.deposit(1, 0, empty_signature, 0);
     }
 
@@ -193,7 +193,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
     function test_WithdrawRequiresActiveCurrency() public {
         vm.startPrank(alice);
 
-        vm.expectRevert("CurrencyNotActive()");
+        vm.expectRevert("Currency Not Active");
         cv.withdraw(1, 10e6);
     }
 
@@ -201,7 +201,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         initializePyth();
         initializedCurrency();
         mintAliceUSDC();
-        vm.expectRevert("NotEnoughCurrencyBalance()");
+        vm.expectRevert("Not Enough Balance");
         cv.withdraw(1, 0);
     }
 
@@ -211,7 +211,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
 
         vm.startPrank(alice);
         uint256 aliceBalance = ICurrency(currencyAddr).balanceOf(alice);
-        vm.expectRevert("NotEnoughCurrencyBalance()");
+        vm.expectRevert("Not Enough Balance");
         cv.withdraw(1, aliceBalance);
     }
 
@@ -232,7 +232,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         initializePyth();
         initializedCurrency();
         vm.startPrank(alice);
-        vm.expectRevert("NotTheVault()");
+        vm.expectRevert("Not the Vault");
         ICurrency(currencyAddr).mint(10e6, alice);
     }
 
@@ -242,7 +242,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         initializePyth();
         initializedCurrency();
         vm.startPrank(alice);
-        vm.expectRevert("NotTheVault()");
+        vm.expectRevert("Not the Vault");
         ICurrency(currencyAddr).burn(10e6, alice);
     }
 }

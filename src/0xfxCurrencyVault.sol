@@ -13,8 +13,7 @@ import {
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-pragma solidity 0.8.34;
-
+pragma solidity ^0.8.22;
 contract CurrencyVault is ReentrancyGuardTransient {
     using SafeERC20 for ICurrency;
     IPyth pyth;
@@ -50,14 +49,8 @@ contract CurrencyVault is ReentrancyGuardTransient {
     );
     event CurrencyInitialized(address indexed currency);
 
-    error CurrencyNotActive();
-    error CurrencyAlreadyActive();
-    error NotEnoughCurrencyBalance();
-    error NotTheOwner();
-    error NotMoreThanZero();
-
     modifier onlyVaultOwner() {
-        require(checkVaultOwner(), NotTheOwner());
+        require(checkVaultOwner(), "Not the owner");
         _;
     }
 
@@ -79,8 +72,8 @@ contract CurrencyVault is ReentrancyGuardTransient {
         uint256 deadline
     ) external nonReentrant {
         //  check currencyPair,
-        require(currencies[cid].active, CurrencyNotActive());
-        require(amount > 0, NotMoreThanZero());
+        require(currencies[cid].active, "Currency Not Active");
+        require(amount > 0, "Cant be Zero");
         CurrencyInfo memory ci = currencies[cid];
 
         // check signature
@@ -110,12 +103,12 @@ contract CurrencyVault is ReentrancyGuardTransient {
     /// at the moment we are assuming USD as the quoteCurrrency.
     // any issues with nonQuoted USDC currencies are valid.
     function withdraw(uint256 cid, uint256 amount) external nonReentrant {
-        require(currencies[cid].active, CurrencyNotActive());
+        require(currencies[cid].active, "Currency Not Active");
         CurrencyInfo memory ci = currencies[cid];
         require(
             ICurrency(ci.currencyAddr).balanceOf(msg.sender) >= amount &&
                 amount > 0,
-            NotEnoughCurrencyBalance()
+            "Not Enough Balance"
         );
 
         uint256 price = uint256(getCurrentPrice(ci.pythFeedID));
@@ -131,7 +124,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
     // calls Pyth oracle price feed to confirm if the priceFeed exists.
     function initCurrency(CurrencyInfo memory c) external onlyVaultOwner {
         // currency cannot be active
-        require(!currencies[c.currencyID].active, CurrencyAlreadyActive());
+        require(!currencies[c.currencyID].active, "Currency Already Active!");
 
         // call pyth oracle and test if it works! we can get the price back;
         c.currentPrice = uint256(getCurrentPrice(c.pythFeedID));

@@ -27,16 +27,65 @@ contract HookVaultBase is Test, Deployers {
     FxHook hook;
     USDC usdc;
 
+    struct Permit {
+        address owner;
+        address spender;
+        uint256 value;
+        uint256 nonce;
+        uint256 deadline;
+    }
+
+    address owner = makeAddr("owner");
+    uint256 alicePK;
+    address alice;
+
     function setUp() external {
         deployFreshManagerAndRouters();
 
         // testie..
         address hookAddress = address(uint160(Hooks.BEFORE_SWAP_FLAG));
 
-        deployCodeTo("0xfxHook.sol", abi.encode(manager), hookAddress);
+        deployCodeTo(
+            "0xfxHook.sol:FxHook",
+            abi.encode(manager, address(usdc)),
+            hookAddress
+        );
 
-        hook = FxHook(hookAddress, IERC20(usdc));
-
+        hook = FxHook(hookAddress);
+        (alice, alicePK) = makeAddrAndKey("alice");
         // We dont need ot set it up fully atm, but no
+    }
+
+    function getDepositUSDCSignature(
+        Permit memory P
+    ) public view returns (bytes memory) {
+        bytes32 GH = getUSDCMessage(P);
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePK, GH);
+
+        return abi.encodePacked(r, s, v);
+    }
+
+    function getUSDCMessage(Permit memory P) public view returns (bytes32) {
+        return (
+            keccak256(
+                abi.encodePacked(
+                    hex"1901",
+                    usdc.DOMAIN_SEPARATOR(),
+                    keccak256(
+                        abi.encode(
+                            keccak256(
+                                "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+                            ),
+                            P.owner,
+                            P.spender,
+                            P.value,
+                            usdc.nonces(P.owner),
+                            P.deadline
+                        )
+                    )
+                )
+            )
+        );
     }
 }
