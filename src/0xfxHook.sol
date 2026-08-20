@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.34;
+pragma solidity ^0.8.22;
 
 import {SwapMath} from "@uniswap/v4-core/src/libraries/SwapMath.sol";
 import {Hooks, IHooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -46,7 +46,7 @@ import {
 import {ICurrency} from "./interfaces/ICurrency.sol";
 import {Lib} from "./utils/0xLib.sol";
 
-contract Oxfx is BaseHook, ERC20, ReentrancyGuardTransient {
+contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     ICurrency USDC;
 
     using SafeERC20 for ICurrency;
@@ -66,6 +66,7 @@ contract Oxfx is BaseHook, ERC20, ReentrancyGuardTransient {
     uint256 liquidityUsed;
 
     error CannotBeMoreThanMaxCooldown();
+    error CannotWithdrawYet();
     event Transferred(
         address indexed sender,
         address indexed receiver,
@@ -83,10 +84,7 @@ contract Oxfx is BaseHook, ERC20, ReentrancyGuardTransient {
         uint256 amount
     );
 
-    event CooldownPeriodChanged(
-        uint256 oldCD,
-        uint256 newCD
-    );
+    event CooldownPeriodChanged(uint256 oldCD, uint256 newCD);
 
     // Hook
     // Vault
@@ -149,8 +147,10 @@ contract Oxfx is BaseHook, ERC20, ReentrancyGuardTransient {
     ) external nonReentrant {
         // checks
         require(balanceOf(msg.sender) >= shareAmount, Lib.NotEnoughBalance());
-        require(block.timestamp >= withdrawalCooldown[msg.sender] )
-
+        require(
+            block.timestamp >= withdrawalCooldown[msg.sender],
+            CannotWithdrawYet()
+        );
 
         uint256 _assets = _convertToAssets(shareAmount);
 
@@ -164,7 +164,10 @@ contract Oxfx is BaseHook, ERC20, ReentrancyGuardTransient {
 
     // add @access control.
     function changeCooldownPeriod(uint256 newCDPeriod) external {
-        require(MAX_DEPOSIT_COOLDOWN >= newCDPeriod,CannotBeMoreThanMaxCooldown());
+        require(
+            MAX_DEPOSIT_COOLDOWN >= newCDPeriod,
+            CannotBeMoreThanMaxCooldown()
+        );
         uint256 oldCDPeriod = currentDepositCoolDown;
         currentDepositCoolDown = newCDPeriod;
 

@@ -5,7 +5,7 @@ import {
 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-pragma solidity 0.8.34;
+pragma solidity ^0.8.22;
 
 contract USDC is ERC20, ERC20Permit {
     constructor() ERC20Permit("USDC") ERC20("USDC", "USDC") {}

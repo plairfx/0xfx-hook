@@ -3,7 +3,6 @@
 import {Currency} from "./0xfxCurrency.sol";
 import {ICurrency} from "./interfaces/ICurrency.sol";
 import {IPyth, PythStructs} from "./interfaces/Pyth/IPyth.sol";
-// import {PythStructs} from "./interfaces/Pyth/PythStructs.sol";
 
 import {
     ReentrancyGuardTransient
@@ -72,7 +71,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
     /// @dev deposits USDC -> to any intialized Currency,
     /// the currency rate being used is depended
     /// at the moment we are assuming USD as the quoteCurrrency.
-    // any issues with nonQuoted USDC currencies are valid.
+    /// any issues with nonQuoted USDC currencies are valid.
     function deposit(
         uint256 cid,
         uint256 amount,

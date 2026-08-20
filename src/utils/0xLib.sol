@@ -2,7 +2,7 @@
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-pragma solidity 0.8.34;
+pragma solidity ^0.8.22;
 
 library Lib {
     // eip712 is thehash messaging,
