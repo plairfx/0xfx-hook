@@ -23,6 +23,9 @@ contract CurrencyVault is ReentrancyGuardTransient {
     address owner;
     address immutable USDC;
 
+    // @note add a timestamp in seconds variable for the stale price check..
+    uint256 valid_time_distance = 60; // 60seconds..
+
     modifier onlyVaultOwner() {
         require(checkVaultOwner(), NotTheOwner());
         _;
@@ -40,12 +43,11 @@ contract CurrencyVault is ReentrancyGuardTransient {
     );
     event CurrencyInitialized(address indexed currency);
 
-    bytes32 immutable empty_signature = keccak256(abi.encode(0));
-
     error CurrencyNotActive();
     error CurrencyAlreadyActive();
     error NotEnoughCurrencyBalance();
     error NotTheOwner();
+    error NotMoreThanZero();
 
     struct CurrencyInfo {
         uint256 currencyID;
@@ -74,10 +76,11 @@ contract CurrencyVault is ReentrancyGuardTransient {
     ) external nonReentrant {
         //  check currencyPair,
         require(currencies[cid].active, CurrencyNotActive());
+        require(amount > 0, NotMoreThanZero());
         CurrencyInfo memory ci = currencies[cid];
 
         // check signature
-        if (keccak256(signature) != empty_signature) {
+        if (deadline != 0) {
             (uint8 v, bytes32 r, bytes32 s) = getParsedSignature(signature);
             ICurrency(USDC).permit(
                 msg.sender,
@@ -102,7 +105,8 @@ contract CurrencyVault is ReentrancyGuardTransient {
         require(currencies[cid].active, CurrencyNotActive());
         CurrencyInfo memory ci = currencies[cid];
         require(
-            ICurrency(ci.currencyAddr).balanceOf(msg.sender) >= amount,
+            ICurrency(ci.currencyAddr).balanceOf(msg.sender) >= amount &&
+                amount > 0,
             NotEnoughCurrencyBalance()
         );
 
@@ -140,10 +144,10 @@ contract CurrencyVault is ReentrancyGuardTransient {
         PythStructs.Price memory price;
         // initialize the currency
 
-        try pyth.getPriceNoOlderThan(feedID, 10) {
+        try pyth.getPriceNoOlderThan(feedID, valid_time_distance) {
             // 20 seconds, we call this agian to save the price,
             // as we do not know if the price will revert or not.
-            price = pyth.getPriceNoOlderThan(feedID, 20);
+            price = pyth.getPriceNoOlderThan(feedID, valid_time_distance + 20);
         } catch {
             // reverts if updatedTime - block.timestamp is less than  - age we set.
             revert();
@@ -153,7 +157,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
 
     function getParsedSignature(
         bytes memory signature
-    ) public view returns (uint8, bytes32, bytes32) {
+    ) internal view returns (uint8, bytes32, bytes32) {
         return ECDSA.parse(signature);
     }
 

@@ -9,6 +9,8 @@ import {console} from "forge-std/console.sol";
 pragma solidity 0.8.34;
 
 contract CurrencyVaultTest is CurrencyVaultBase {
+    address currencyAddr = 0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2;
+    bytes empty_signature;
     // Init Functions..
     function test_NonVaultOwnerCannotInitialize() public {
         vm.startPrank(alice);
@@ -77,9 +79,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         mintAliceUSDC();
 
         uint256 usdcBalanceAlice = usdc.balanceOf(alice);
-        uint256 EURBalanceAlice = ICurrency(
-            0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2
-        ).balanceOf(alice);
+        uint256 EURBalanceAlice = ICurrency(currencyAddr).balanceOf(alice);
         vm.startPrank(alice);
 
         uint256 deadline = block.timestamp + 10 minutes;
@@ -97,9 +97,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         cv.deposit(1, amount, signature, deadline);
 
         uint256 usdcBalanceAliceAfter = usdc.balanceOf(alice);
-        uint256 EURBalanceAliceAfter = ICurrency(
-            0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2
-        ).balanceOf(alice);
+        uint256 EURBalanceAliceAfter = ICurrency(currencyAddr).balanceOf(alice);
 
         assertEq(usdcBalanceAlice - amount, usdcBalanceAliceAfter);
         assertEq(
@@ -108,10 +106,64 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         );
     }
 
+    function test_DepositRequiresActiveCurrency() public {
+        vm.startPrank(alice);
+        vm.expectRevert("CurrencyNotActive()");
+
+        cv.deposit(1, 100e6, empty_signature, 0);
+    }
+
+    function test_DepositRequiresAmountMoreThanZero() public {
+        initializePyth();
+        initializedCurrency();
+        mintAliceUSDC();
+
+        vm.startPrank(alice);
+        vm.expectRevert("NotMoreThanZero()");
+        cv.deposit(1, 0, empty_signature, 0);
+    }
+
+    function test_DepositRequiresValidSignature() public {
+        initializePyth();
+        initializedCurrency();
+        mintAliceUSDC();
+
+        vm.startPrank(alice);
+
+        uint256 deadline = block.timestamp + 10 minutes;
+        uint256 amount = 10e6;
+        bytes memory signature = getDepositUSDCSignature(
+            Permit({
+                owner: alice,
+                spender: address(cv),
+                value: amount,
+                nonce: usdc.nonces(alice),
+                deadline: deadline
+            })
+        );
+
+        vm.expectRevert();
+        cv.deposit(1, amount, signature, deadline + 1 minutes); // adding + 1 minute than signed deadline.
+    }
+
+    function test_DepositRequiresNonStalePrice() public {
+        initializePyth();
+        initializedCurrency();
+        mintAliceUSDC();
+
+        uint256 amount = 10e6; // 10 USDC
+        vm.warp(block.timestamp + 61 seconds);
+
+        vm.startPrank(alice);
+        usdc.approve(address(cv), amount);
+
+        vm.expectRevert();
+        cv.deposit(1, amount, empty_signature, 0);
+    }
+
     // Withdraw...
 
     function test_Withdraw() public {
-        address currencyAddr = 0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2;
         aliceDeposited10USDCForEUR();
 
         PythStructs.Price memory PP = pyth.getPriceNoOlderThan(
@@ -136,5 +188,61 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         // the maths dont add up here.
         assertEq(usdcBalanceAlice + expectedUSDCAmount, usdcBalanceAliceAfter);
         assertEq(EURBalanceAlice - EURBalanceAlice, EURBalanceAliceAfter);
+    }
+
+    function test_WithdrawRequiresActiveCurrency() public {
+        vm.startPrank(alice);
+
+        vm.expectRevert("CurrencyNotActive()");
+        cv.withdraw(1, 10e6);
+    }
+
+    function test_WithdrawRequiresAmountMoreThanZero() public {
+        initializePyth();
+        initializedCurrency();
+        mintAliceUSDC();
+        vm.expectRevert("NotEnoughCurrencyBalance()");
+        cv.withdraw(1, 0);
+    }
+
+    function test_WithdrawRequiresEnoughCurrencyBalance() public {
+        initializePyth();
+        initializedCurrency();
+
+        vm.startPrank(alice);
+        uint256 aliceBalance = ICurrency(currencyAddr).balanceOf(alice);
+        vm.expectRevert("NotEnoughCurrencyBalance()");
+        cv.withdraw(1, aliceBalance);
+    }
+
+    function test_WithdrawRequiresNonStalePrice() public {
+        aliceDeposited10USDCForEUR();
+        vm.warp(block.timestamp + 61 seconds);
+        vm.startPrank(alice);
+        uint256 aliceBalance = ICurrency(currencyAddr).balanceOf(alice);
+        vm.expectRevert();
+        cv.withdraw(1, aliceBalance);
+    }
+
+    // Currency Tests.
+
+    function test_OnlyVaultOwnerCanMint() public {
+        // Initialized Pyth Oracle and currencies..
+
+        initializePyth();
+        initializedCurrency();
+        vm.startPrank(alice);
+        vm.expectRevert("NotTheVault()");
+        ICurrency(currencyAddr).mint(10e6, alice);
+    }
+
+    function test_OnlyVaultOwnerCanBurn() public {
+        // Initialized Pyth Oracle and currencies..
+
+        initializePyth();
+        initializedCurrency();
+        vm.startPrank(alice);
+        vm.expectRevert("NotTheVault()");
+        ICurrency(currencyAddr).burn(10e6, alice);
     }
 }
