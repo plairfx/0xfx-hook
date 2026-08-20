@@ -26,6 +26,7 @@ contract CurrencyVaultBase is Test {
     address owner = makeAddr("owner");
     uint256 alicePK;
     address alice;
+
     function setUp() external {
         usdc = new USDC();
         pyth = new MockPyth(1, 1);

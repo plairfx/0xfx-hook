@@ -105,12 +105,17 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         bytes memory signature
     ) public nonReentrant returns (uint256 shares) {
         // checks
-        require(USDC.balanceOf(msg.sender) >= usdcAmount, "Not Enough Balance");
+        require(
+            USDC.balanceOf(msg.sender) >= usdcAmount && usdcAmount > 0,
+            "Not Enough Balance"
+        );
 
         (uint8 v, bytes32 r, bytes32 s) = Lib.getParsedSignature(signature);
 
         uint256 _shares = _convertToShares(usdcAmount);
-        withdrawalCooldown[msg.sender] = block.timestamp;
+        withdrawalCooldown[msg.sender] =
+            block.timestamp +
+            currentDepositCoolDown;
 
         if (deadline != 0) {
             USDC.permit(
@@ -137,11 +142,13 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
 
     function withdraw(
         uint256 shareAmount,
-        address receiver,
-        bytes memory signature
+        address receiver
     ) external nonReentrant {
         // checks
-        require(balanceOf(msg.sender) >= shareAmount, "Not Enough Balance");
+        require(
+            balanceOf(msg.sender) >= shareAmount && shareAmount > 0,
+            "Not Enough Balance"
+        );
         require(
             block.timestamp >= withdrawalCooldown[msg.sender],
             "Cannot Withdraw Yet"

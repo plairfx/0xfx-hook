@@ -41,12 +41,17 @@ contract HookVaultBase is Test, Deployers {
 
     function setUp() external {
         deployFreshManagerAndRouters();
+        deployMintAndApprove2Currencies();
+
+        usdc = new USDC();
 
         // testie..
-        address hookAddress = address(uint160(Hooks.BEFORE_SWAP_FLAG));
+        address hookAddress = address(
+            uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG)
+        );
 
         deployCodeTo(
-            "0xfxHook.sol:FxHook",
+            "src/0xfxHook.sol",
             abi.encode(manager, address(usdc)),
             hookAddress
         );
@@ -54,6 +59,29 @@ contract HookVaultBase is Test, Deployers {
         hook = FxHook(hookAddress);
         (alice, alicePK) = makeAddrAndKey("alice");
         // We dont need ot set it up fully atm, but no
+    }
+
+    function aliceMintedUSDC() public {
+        usdc.mint(alice, 100e6);
+    }
+
+    function aliceDeposited10USDC() public {
+        aliceMintedUSDC();
+
+        // depositing..
+        vm.startPrank(alice);
+        uint256 depositAmount = 10e6;
+        bytes memory signature = getDepositUSDCSignature(
+            Permit({
+                owner: alice,
+                spender: address(hook),
+                value: depositAmount,
+                nonce: usdc.nonces(alice),
+                deadline: block.timestamp + 10 minutes
+            })
+        );
+
+        hook.deposit(depositAmount, block.timestamp + 10 minutes, signature);
     }
 
     function getDepositUSDCSignature(
