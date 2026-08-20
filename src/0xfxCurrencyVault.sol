@@ -17,19 +17,27 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 pragma solidity 0.8.34;
 
 contract CurrencyVault is ReentrancyGuardTransient {
-    IPyth pyth;
     using SafeERC20 for ICurrency;
+    IPyth pyth;
     ICurrency currency;
+
     address owner;
     address immutable USDC;
-
-    // @note add a timestamp in seconds variable for the stale price check..
     uint256 valid_time_distance = 60; // 60seconds..
 
-    modifier onlyVaultOwner() {
-        require(checkVaultOwner(), NotTheOwner());
-        _;
+    struct CurrencyInfo {
+        uint256 currencyID;
+        string currencyName;
+        string currencyCode;
+        address currencyAddr;
+        bytes32 pythFeedID;
+        uint256 currentPrice;
+        uint256 lastUpdated;
+        bool active;
     }
+
+    mapping(uint256 currencyID => CurrencyInfo) currencies;
+
     event Deposited(
         address indexed user,
         uint256 amount,
@@ -49,25 +57,22 @@ contract CurrencyVault is ReentrancyGuardTransient {
     error NotTheOwner();
     error NotMoreThanZero();
 
-    struct CurrencyInfo {
-        uint256 currencyID;
-        string currencyName;
-        string currencyCode;
-        address currencyAddr;
-        bytes32 pythFeedID;
-        uint256 currentPrice;
-        uint256 lastUpdated;
-        bool active;
+    modifier onlyVaultOwner() {
+        require(checkVaultOwner(), NotTheOwner());
+        _;
     }
 
-    mapping(uint256 currencyID => CurrencyInfo) currencies;
-
+    /// @notice initializes the pyth oracle, usdc and owner.
     constructor(address pythAddress, address usdc, address _owner) {
         pyth = IPyth(pythAddress);
         USDC = usdc;
         owner = _owner;
     }
 
+    /// @dev deposits USDC -> to any intialized Currency,
+    /// the currency rate being used is depended
+    /// at the moment we are assuming USD as the quoteCurrrency.
+    // any issues with nonQuoted USDC currencies are valid.
     function deposit(
         uint256 cid,
         uint256 amount,
@@ -101,6 +106,10 @@ contract CurrencyVault is ReentrancyGuardTransient {
         emit Deposited(msg.sender, amount, ci.currencyAddr);
     }
 
+    /// @dev withdraws any intialized currency -> USDC.
+    /// the currency rate being used is depended on the PYTH oracle.
+    /// at the moment we are assuming USD as the quoteCurrrency.
+    // any issues with nonQuoted USDC currencies are valid.
     function withdraw(uint256 cid, uint256 amount) external nonReentrant {
         require(currencies[cid].active, CurrencyNotActive());
         CurrencyInfo memory ci = currencies[cid];
@@ -119,6 +128,8 @@ contract CurrencyVault is ReentrancyGuardTransient {
         emit Withdrawn(msg.sender, amount * price, ci.currencyAddr);
     }
 
+    /// @notice intializes the currency for use.
+    // calls Pyth oracle price feed to confirm if the priceFeed exists.
     function initCurrency(CurrencyInfo memory c) external onlyVaultOwner {
         // currency cannot be active
         require(!currencies[c.currencyID].active, CurrencyAlreadyActive());
@@ -140,14 +151,13 @@ contract CurrencyVault is ReentrancyGuardTransient {
         emit CurrencyInitialized(address(newToken));
     }
 
+    /// @dev gets current price of an currency from the pyth oracle.
+    /// @notice it reverts if the price is stale (outdated than the valid_time_distance).
     function getCurrentPrice(bytes32 feedID) internal view returns (int256) {
         PythStructs.Price memory price;
-        // initialize the currency
 
         try pyth.getPriceNoOlderThan(feedID, valid_time_distance) {
-            // 20 seconds, we call this agian to save the price,
-            // as we do not know if the price will revert or not.
-            price = pyth.getPriceNoOlderThan(feedID, valid_time_distance + 20);
+            price = pyth.getPriceNoOlderThan(feedID, valid_time_distance);
         } catch {
             // reverts if updatedTime - block.timestamp is less than  - age we set.
             revert();
