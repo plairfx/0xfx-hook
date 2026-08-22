@@ -78,8 +78,9 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         initializedCurrency();
         mintAliceUSDC();
 
+        CurrencyVault.CurrencyInfo memory CI = cv.getCurrencyInfo(1);
         uint256 usdcBalanceAlice = usdc.balanceOf(alice);
-        uint256 EURBalanceAlice = ICurrency(currencyAddr).balanceOf(alice);
+        uint256 EURBalanceAlice = ICurrency(CI.currencyAddr).balanceOf(alice);
         vm.startPrank(alice);
 
         uint256 deadline = block.timestamp + 10 minutes;
@@ -97,7 +98,9 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         cv.deposit(1, amount, signature, deadline);
 
         uint256 usdcBalanceAliceAfter = usdc.balanceOf(alice);
-        uint256 EURBalanceAliceAfter = ICurrency(currencyAddr).balanceOf(alice);
+        uint256 EURBalanceAliceAfter = ICurrency(CI.currencyAddr).balanceOf(
+            alice
+        );
 
         assertEq(usdcBalanceAlice - amount, usdcBalanceAliceAfter);
         assertEq(
@@ -171,19 +174,28 @@ contract CurrencyVaultTest is CurrencyVaultBase {
             60
         );
 
+        // get hte currencyADDR
+        CurrencyVault.CurrencyInfo memory CI = cv.getCurrencyInfo(1); // 0 = USD 1 == EUR.
+
         uint256 usdcBalanceAlice = usdc.balanceOf(alice);
-        uint256 EURBalanceAlice = ICurrency(currencyAddr).balanceOf(alice);
+        uint256 EURBalanceAlice = ICurrency(CI.currencyAddr).balanceOf(alice);
         uint256 amount = EURBalanceAlice; // i want to withdraw the whole balance!.
 
         uint256 expectedUSDCAmount = amount * uint256(int256(PP.price));
         vm.startPrank(alice);
         vm.expectEmit(true, true, true, true);
-        emit CurrencyVault.Withdrawn(alice, expectedUSDCAmount, currencyAddr);
+        emit CurrencyVault.Withdrawn(
+            alice,
+            expectedUSDCAmount,
+            CI.currencyAddr
+        );
 
         cv.withdraw(1, amount);
 
         uint256 usdcBalanceAliceAfter = usdc.balanceOf(alice);
-        uint256 EURBalanceAliceAfter = ICurrency(currencyAddr).balanceOf(alice);
+        uint256 EURBalanceAliceAfter = ICurrency(CI.currencyAddr).balanceOf(
+            alice
+        );
 
         // the maths dont add up here.
         assertEq(usdcBalanceAlice + expectedUSDCAmount, usdcBalanceAliceAfter);

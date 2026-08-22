@@ -1,6 +1,6 @@
 // SDPX-License-Identifier: MIT
 
-import {Currency} from "./0xfxCurrency.sol";
+import {CurrencyFX} from "./0xfxCurrency.sol";
 import {ICurrency} from "./interfaces/ICurrency.sol";
 import {IPyth, PythStructs} from "./interfaces/Pyth/IPyth.sol";
 
@@ -55,10 +55,27 @@ contract CurrencyVault is ReentrancyGuardTransient {
     }
 
     /// @notice initializes the pyth oracle, usdc and owner.
-    constructor(address pythAddress, address usdc, address _owner) {
+    constructor(
+        address pythAddress,
+        address usdc,
+        address _owner,
+        CurrencyInfo memory C
+    ) {
         pyth = IPyth(pythAddress);
         USDC = usdc;
         owner = _owner;
+
+        CurrencyFX newToken = new CurrencyFX(
+            C.currencyName,
+            C.currencyCode,
+            address(this)
+        );
+
+        // USDC = ACTIVE
+        currencies[0] = C;
+        currencies[0].currencyAddr = address(newToken);
+
+        emit CurrencyInitialized(address(newToken));
     }
 
     /// @dev deposits USDC -> to any intialized Currency,
@@ -90,7 +107,12 @@ contract CurrencyVault is ReentrancyGuardTransient {
             );
         }
         // get updatedPyth price.
-        uint256 price = uint256(getCurrentPrice(ci.pythFeedID));
+        uint256 price;
+        if (cid == 0) {
+            price = 1e6; // 1 USD == 1 USDC!
+        } else {
+            price = uint256((getCurrentPrice(ci.pythFeedID)));
+        }
 
         ICurrency(USDC).safeTransferFrom(msg.sender, address(this), amount);
         ICurrency(ci.currencyAddr).mint((amount / price), msg.sender);
@@ -127,9 +149,10 @@ contract CurrencyVault is ReentrancyGuardTransient {
         require(!currencies[c.currencyID].active, "Currency Already Active!");
 
         // call pyth oracle and test if it works! we can get the price back;
+
         c.currentPrice = uint256(getCurrentPrice(c.pythFeedID));
 
-        Currency newToken = new Currency(
+        CurrencyFX newToken = new CurrencyFX(
             c.currencyName,
             c.currencyCode,
             address(this)
@@ -165,5 +188,11 @@ contract CurrencyVault is ReentrancyGuardTransient {
 
     function checkVaultOwner() internal view returns (bool) {
         return owner == msg.sender;
+    }
+
+    function getCurrencyInfo(
+        uint256 cid
+    ) public view returns (CurrencyInfo memory) {
+        return currencies[cid];
     }
 }

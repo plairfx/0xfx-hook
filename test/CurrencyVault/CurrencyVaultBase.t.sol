@@ -30,7 +30,18 @@ contract CurrencyVaultBase is Test {
     function setUp() external {
         usdc = new USDC();
         pyth = new MockPyth(1, 1);
-        cv = new CurrencyVault(address(pyth), address(usdc), owner);
+        CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
+            currencyID: 0,
+            currencyName: "US DOLLAR",
+            currencyCode: "USD",
+            currencyAddr: address(0x0),
+            pythFeedID: bytes32(0),
+            currentPrice: 0,
+            lastUpdated: block.timestamp,
+            active: true
+        });
+        cv = new CurrencyVault(address(pyth), address(usdc), owner, CI);
+
         (alice, alicePK) = makeAddrAndKey("alice");
     }
 
@@ -64,10 +75,7 @@ contract CurrencyVaultBase is Test {
             lastUpdated: 0,
             active: false
         });
-        vm.expectEmit();
-        emit CurrencyVault.CurrencyInitialized(
-            0x4f81992FCe2E1846dD528eC0102e6eE1f61ed3e2
-        ); // not predicting the addr..
+
         cv.initCurrency(C);
     }
 

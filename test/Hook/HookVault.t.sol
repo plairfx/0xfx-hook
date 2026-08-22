@@ -33,7 +33,7 @@ contract HookVaultTest is HookVaultBase {
         );
 
         uint256 expectedShares = hook.previewDeposit(depositAmount);
-        uint256 expectedShares2 = hook.previewMint(deposit);
+        uint256 expectedShares2 = hook.previewMint(depositAmount);
 
         vm.expectEmit(true, true, true, true);
         emit FxHook.Deposited(alice, address(alice), depositAmount);
@@ -50,6 +50,7 @@ contract HookVaultTest is HookVaultBase {
         assertEq(expectedShares, expectedShares2);
     }
 
+    function test_SetupWorks() public {}
     function test_DepositNotEnoughBalance() public {
         vm.startPrank(alice);
 
@@ -144,16 +145,20 @@ contract HookVaultTest is HookVaultBase {
 
     function test_ChangeCoolDownPeriod() public {
         // current is 3 days.
+        vm.startPrank(owner);
         vm.expectEmit(true, true, true, true);
         emit FxHook.CooldownPeriodChanged(3 days, 30 days);
         hook.changeCooldownPeriod(30 days);
     }
 
-    // we need to add access control.
-    function test_CooldownPeriodCannotBeCalledByUser() public {}
+    function test_CooldownPeriodCannotBeCalledByUser() public {
+        vm.expectRevert("Not the owner");
+        hook.changeCooldownPeriod(4 days);
+    }
 
     function test_CannotChangeCooldownMoreThanMax() public {
         vm.expectRevert("Cannot be more than MAX_CD");
+        vm.startPrank(owner);
         hook.changeCooldownPeriod(30 days + 1 seconds);
     }
 }

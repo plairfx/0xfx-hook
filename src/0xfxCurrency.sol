@@ -6,7 +6,7 @@ import {
 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
 pragma solidity ^0.8.22;
-contract Currency is ERC20Permit {
+contract CurrencyFX is ERC20Permit {
     address immutable CURRENCY_VAULT;
 
     modifier onlyVaultCheck() {

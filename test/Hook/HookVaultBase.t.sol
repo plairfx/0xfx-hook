@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {USDC} from "../mocks/USDC.sol";
 import {FxHook} from "../../src/0xfxHook.sol";
+import {CurrencyFX} from "../../src/0xfxCurrency.sol";
+import {MockPyth} from "../mocks/MockPyth.sol";
+import {CurrencyVault} from "../../src/0xfxCurrencyVault.sol";
+import {ICurrency} from "../../src/interfaces/ICurrency.sol";
 
 // Uniswap related;
 import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
@@ -26,7 +30,13 @@ import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 contract HookVaultBase is Test, Deployers {
     FxHook hook;
     USDC usdc;
+    CurrencyFX EUR;
+    CurrencyFX USD;
 
+    MockPyth pyth;
+    CurrencyVault cv;
+
+    bytes32 EURUSD_PRICE_FEED_ID = bytes32(uint256(0x1));
     struct Permit {
         address owner;
         address spender;
@@ -41,9 +51,26 @@ contract HookVaultBase is Test, Deployers {
 
     function setUp() external {
         deployFreshManagerAndRouters();
-        deployMintAndApprove2Currencies();
+        // / wrapper error cuz of this?
+        // deployMintAndApprove2Currencies();
 
         usdc = new USDC();
+        // initializing needed currencyVault..
+        pyth = new MockPyth(1, 1);
+        CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
+            currencyID: 0,
+            currencyName: "US DOLLAR",
+            currencyCode: "USD",
+            currencyAddr: address(0x0),
+            pythFeedID: bytes32(0),
+            currentPrice: 0,
+            lastUpdated: block.timestamp,
+            active: true
+        });
+        cv = new CurrencyVault(address(pyth), address(usdc), owner, CI);
+
+        // we will have EUR an
+        initializeVaultAndPythEUR();
 
         // testie..
         address hookAddress = address(
@@ -52,13 +79,74 @@ contract HookVaultBase is Test, Deployers {
 
         deployCodeTo(
             "src/0xfxHook.sol",
-            abi.encode(manager, address(usdc)),
+            abi.encode(manager, address(usdc), owner),
             hookAddress
         );
 
         hook = FxHook(hookAddress);
         (alice, alicePK) = makeAddrAndKey("alice");
-        // We dont need ot set it up fully atm, but no
+
+        approveTokens(ICurrency(0xB8CB40a1A898925C594a5b64494AD34EE3027B1a));
+        approveTokens(ICurrency(0x1F88f48585ad6754e59c03debd4502399e33Ff50));
+
+        (key, ) = initPool(
+            Currency.wrap(0xB8CB40a1A898925C594a5b64494AD34EE3027B1a),
+            Currency.wrap(0x1F88f48585ad6754e59c03debd4502399e33Ff50),
+            hook,
+            500,
+            8554990806e28 // SQRT PRICE.
+        );
+    }
+
+    function approveTokens(ICurrency token) public {
+        address[9] memory toApprove = [
+            address(swapRouter),
+            address(swapRouterNoChecks),
+            address(modifyLiquidityRouter),
+            address(modifyLiquidityNoChecks),
+            address(donateRouter),
+            address(takeRouter),
+            address(claimsRouter),
+            address(nestedActionRouter.executor()),
+            address(actionsRouter)
+        ];
+
+        for (uint256 i = 0; i < toApprove.length; i++) {
+            token.approve(toApprove[i], type(uint256).max);
+        }
+    }
+
+    function initializeVaultAndPythEUR() public {
+        // initialize pyth
+        bytes[] memory updateData = new bytes[](1);
+
+        updateData[0] = pyth.createPriceFeedUpdateData(
+            EURUSD_PRICE_FEED_ID,
+            1165950,
+            10,
+            -5,
+            1165950,
+            10,
+            uint64(block.timestamp),
+            uint64(block.timestamp)
+        );
+
+        uint256 fee = pyth.getUpdateFee(updateData);
+        pyth.updatePriceFeeds{value: fee}(updateData);
+
+        vm.startPrank(owner);
+        CurrencyVault.CurrencyInfo memory C = CurrencyVault.CurrencyInfo({
+            currencyID: 1,
+            currencyName: "EURO",
+            currencyCode: "EUR",
+            currencyAddr: address(0x0),
+            pythFeedID: EURUSD_PRICE_FEED_ID,
+            currentPrice: 0,
+            lastUpdated: 0,
+            active: false
+        });
+
+        cv.initCurrency(C);
     }
 
     function aliceMintedUSDC() public {

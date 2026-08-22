@@ -24,6 +24,7 @@ import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 import {
     IERC20Minimal
 } from "@uniswap/v4-core/src/interfaces/external/IERC20Minimal.sol";
+
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {
     ERC4626,
@@ -31,6 +32,7 @@ import {
     ERC20
 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {BaseHook} from "v4-hooks-public/src/base/BaseHook.sol";
+import {IMsgSender} from "@uniswap/v4-periphery/src/interfaces/IMsgSender.sol";
 import {
     ReentrancyGuardTransient
 } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
@@ -55,14 +57,17 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
 
     constructor(
         IPoolManager _IPM,
-        address _USDC
+        address _USDC,
+        address _owner
     ) BaseHook(_IPM) ERC20("0xfx Liquidity Token", "0xfxLT") {
         USDC = ICurrency(address(_USDC));
+        owner = _owner;
     }
 
     uint256 immutable MAX_DEPOSIT_COOLDOWN = 30 days;
     uint256 currentDepositCoolDown = 3 days;
 
+    address owner;
     uint256 liquidityUsed;
 
     event Transferred(
@@ -82,8 +87,14 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         uint256 amount
     );
 
+    event Testie(address sender, address msgsender);
+
     event CooldownPeriodChanged(uint256 oldCD, uint256 newCD);
 
+    modifier onlyOwner() {
+        require(isOwner(msg.sender), "Not the owner");
+        _;
+    }
     // Hook
     // Vault
     // - User funds
@@ -158,14 +169,13 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
 
         _burn(msg.sender, shareAmount);
 
-        // try catch instead??
         USDC.safeTransfer(msg.sender, _assets);
 
         emit Withdrawn(msg.sender, receiver, _assets);
     }
 
     // add @access control.
-    function changeCooldownPeriod(uint256 newCDPeriod) external {
+    function changeCooldownPeriod(uint256 newCDPeriod) external onlyOwner {
         require(
             MAX_DEPOSIT_COOLDOWN >= newCDPeriod,
             "Cannot be more than MAX_CD"
@@ -236,6 +246,10 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         return _convertToShares(_assets);
     }
 
+    function isOwner(address _user) public view returns (bool) {
+        return _user == owner;
+    }
+
     function _beforeSwap(
         address,
         PoolKey calldata key,
@@ -247,5 +261,16 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         returns (bytes4 selector_, BeforeSwapDelta bfd_, uint24 _swapFee)
     {
         selector_ = IHooks.beforeSwap.selector;
+    }
+
+    function _beforeInitialize(
+        address sender,
+        PoolKey calldata key,
+        uint160
+    ) internal override returns (bytes4 selector_) {
+        // check if it is the owner.
+        require(msg.sender == owner);
+        emit Testie(msg.sender, owner);
+        selector_ = IHooks.beforeInitialize.selector;
     }
 }
