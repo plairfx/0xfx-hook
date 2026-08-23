@@ -162,4 +162,6 @@ contract HookVaultTest is HookVaultBase {
         vm.startPrank(owner);
         hook.changeCooldownPeriod(30 days + 1 seconds);
     }
+
+    //
 }

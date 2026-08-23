@@ -28,6 +28,7 @@ import {SwapMath} from "@uniswap/v4-core/src/libraries/SwapMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
 contract HookVaultBase is Test, Deployers {
+    using StateLibrary for IPoolManager;
     FxHook hook;
     USDC usdc;
     CurrencyFX EUR;
@@ -104,8 +105,12 @@ contract HookVaultBase is Test, Deployers {
             hook,
             500,
             1,
-            8554990806e28 // SQRT PRICE. == CURRENT EURUSD PRICE.. (1.165950)
+            85549908060000000000000000000 // SQRT PRICE. == CURRENT EURUSD PRICE.. (1.165950)
         );
+
+        PoolId poolId = key.toId();
+
+        (uint160 sqrtPriceX962, int24 tick, , ) = manager.getSlot0(poolId);
 
         // mint tokens to us.
 
@@ -125,16 +130,28 @@ contract HookVaultBase is Test, Deployers {
 
         vm.startPrank(owner);
 
+        uint128 liquidityBefore = manager.getLiquidity(poolId);
+
+        console.log("Liquidity Before", liquidityBefore);
+
         modifyLiquidityRouter.modifyLiquidity(
             key,
             ModifyLiquidityParams({
-                tickLower: -50,
-                tickUpper: 50,
+                tickLower: TickMath.getTickAtSqrtPrice(
+                    85549908060000000000000000000
+                ) - 10,
+                tickUpper: TickMath.getTickAtSqrtPrice(
+                    85549908060000000000000000000
+                ) + 10,
                 liquidityDelta: 100 ether,
                 salt: bytes32(0)
             }),
             ZERO_BYTES
         );
+
+        uint128 liquidityAfter = manager.getLiquidity(poolId);
+
+        console.log("Liquidity After", liquidityAfter);
     }
 
     function approveTokens(ICurrency token) public {
@@ -186,6 +203,12 @@ contract HookVaultBase is Test, Deployers {
         });
 
         cv.initCurrency(C);
+    }
+
+    function mintOwnerUSD() public {
+        vm.startPrank(address(cv));
+
+        EUR.mint(10e6, owner);
     }
 
     function aliceMintedUSDC() public {
