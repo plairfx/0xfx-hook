@@ -65,11 +65,9 @@ contract CurrencyVault is ReentrancyGuardTransient {
         USDC = usdc;
         owner = _owner;
 
-        CurrencyFX newToken = new CurrencyFX(
-            C.currencyName,
-            C.currencyCode,
-            address(this)
-        );
+        CurrencyFX newToken = new CurrencyFX{
+            salt: keccak256(abi.encode(C.currencyName))
+        }(C.currencyName, C.currencyCode, address(this));
 
         // USDC = ACTIVE
         currencies[0] = C;

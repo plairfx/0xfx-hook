@@ -80,7 +80,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
 
         CurrencyVault.CurrencyInfo memory CI = cv.getCurrencyInfo(1);
         uint256 usdcBalanceAlice = usdc.balanceOf(alice);
-        uint256 EURBalanceAlice = ICurrency(CI.currencyAddr).balanceOf(alice);
+        uint256 EURBalanceAlice = EUR.balanceOf(alice);
         vm.startPrank(alice);
 
         uint256 deadline = block.timestamp + 10 minutes;
@@ -98,10 +98,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         cv.deposit(1, amount, signature, deadline);
 
         uint256 usdcBalanceAliceAfter = usdc.balanceOf(alice);
-        uint256 EURBalanceAliceAfter = ICurrency(CI.currencyAddr).balanceOf(
-            alice
-        );
-
+        uint256 EURBalanceAliceAfter = EUR.balanceOf(alice);
         assertEq(usdcBalanceAlice - amount, usdcBalanceAliceAfter);
         assertEq(
             EURBalanceAlice + (amount / (116595 + 10)),
@@ -178,7 +175,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         CurrencyVault.CurrencyInfo memory CI = cv.getCurrencyInfo(1); // 0 = USD 1 == EUR.
 
         uint256 usdcBalanceAlice = usdc.balanceOf(alice);
-        uint256 EURBalanceAlice = ICurrency(CI.currencyAddr).balanceOf(alice);
+        uint256 EURBalanceAlice = EUR.balanceOf(alice);
         uint256 amount = EURBalanceAlice; // i want to withdraw the whole balance!.
 
         uint256 expectedUSDCAmount = amount * uint256(int256(PP.price));
@@ -193,9 +190,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         cv.withdraw(1, amount);
 
         uint256 usdcBalanceAliceAfter = usdc.balanceOf(alice);
-        uint256 EURBalanceAliceAfter = ICurrency(CI.currencyAddr).balanceOf(
-            alice
-        );
+        uint256 EURBalanceAliceAfter = EUR.balanceOf(alice);
 
         // the maths dont add up here.
         assertEq(usdcBalanceAlice + expectedUSDCAmount, usdcBalanceAliceAfter);
@@ -222,7 +217,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         initializedCurrency();
 
         vm.startPrank(alice);
-        uint256 aliceBalance = ICurrency(currencyAddr).balanceOf(alice);
+        uint256 aliceBalance = EUR.balanceOf(alice);
         vm.expectRevert("Not Enough Balance");
         cv.withdraw(1, aliceBalance);
     }
@@ -231,7 +226,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         aliceDeposited10USDCForEUR();
         vm.warp(block.timestamp + 61 seconds);
         vm.startPrank(alice);
-        uint256 aliceBalance = ICurrency(currencyAddr).balanceOf(alice);
+        uint256 aliceBalance = EUR.balanceOf(alice);
         vm.expectRevert();
         cv.withdraw(1, aliceBalance);
     }
@@ -245,7 +240,7 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         initializedCurrency();
         vm.startPrank(alice);
         vm.expectRevert("Not the Vault");
-        ICurrency(currencyAddr).mint(10e6, alice);
+        EUR.mint(10e6, alice);
     }
 
     function test_OnlyVaultOwnerCanBurn() public {
@@ -255,6 +250,6 @@ contract CurrencyVaultTest is CurrencyVaultBase {
         initializedCurrency();
         vm.startPrank(alice);
         vm.expectRevert("Not the Vault");
-        ICurrency(currencyAddr).burn(10e6, alice);
+        EUR.burn(10e6, alice);
     }
 }

@@ -152,6 +152,7 @@ contract HookVaultTest is HookVaultBase {
     }
 
     function test_CooldownPeriodCannotBeCalledByUser() public {
+        vm.startPrank(alice);
         vm.expectRevert("Not the owner");
         hook.changeCooldownPeriod(4 days);
     }

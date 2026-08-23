@@ -51,15 +51,15 @@ contract HookVaultBase is Test, Deployers {
 
     function setUp() external {
         deployFreshManagerAndRouters();
-        // / wrapper error cuz of this?
+
         // deployMintAndApprove2Currencies();
 
         usdc = new USDC();
         // initializing needed currencyVault..
         pyth = new MockPyth(1, 1);
         CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
-            currencyID: 0,
-            currencyName: "US DOLLAR",
+            currencyID: 2,
+            currencyName: "USD DOLLAR", // this is what i guess makes it bigger? // for now i amke this smaller, as we want this to be smaller>>
             currencyCode: "USD",
             currencyAddr: address(0x0),
             pythFeedID: bytes32(0),
@@ -86,15 +86,54 @@ contract HookVaultBase is Test, Deployers {
         hook = FxHook(hookAddress);
         (alice, alicePK) = makeAddrAndKey("alice");
 
+        approveTokens(ICurrency(0xDBe2aD6459fbf0ca2895bCd875c7133349143CBD));
         approveTokens(ICurrency(0xB8CB40a1A898925C594a5b64494AD34EE3027B1a));
-        approveTokens(ICurrency(0x1F88f48585ad6754e59c03debd4502399e33Ff50));
 
+        Currency currency2 = Currency.wrap(
+            0xDBe2aD6459fbf0ca2895bCd875c7133349143CBD
+        );
+
+        Currency currency3 = Currency.wrap(
+            0xB8CB40a1A898925C594a5b64494AD34EE3027B1a
+        );
+
+        vm.startPrank(owner);
         (key, ) = initPool(
-            Currency.wrap(0xB8CB40a1A898925C594a5b64494AD34EE3027B1a),
-            Currency.wrap(0x1F88f48585ad6754e59c03debd4502399e33Ff50),
+            currency3, // EUR
+            currency2, // USD
             hook,
             500,
-            8554990806e28 // SQRT PRICE.
+            1,
+            8554990806e28 // SQRT PRICE. == CURRENT EURUSD PRICE.. (1.165950)
+        );
+
+        // mint tokens to us.
+
+        // liquidityDelta is 100 ether, so atleast 50e17 each.
+
+        vm.startPrank(address(cv));
+
+        // minting eur and usd to owner.
+        ICurrency(0xDBe2aD6459fbf0ca2895bCd875c7133349143CBD).mint(
+            50e17,
+            owner
+        );
+        ICurrency(0xB8CB40a1A898925C594a5b64494AD34EE3027B1a).mint(
+            50e17,
+            owner
+        );
+
+        vm.startPrank(owner);
+
+        modifyLiquidityRouter.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({
+                tickLower: -50,
+                tickUpper: 50,
+                liquidityDelta: 100 ether,
+                salt: bytes32(0)
+            }),
+            ZERO_BYTES
         );
     }
 
@@ -137,7 +176,7 @@ contract HookVaultBase is Test, Deployers {
         vm.startPrank(owner);
         CurrencyVault.CurrencyInfo memory C = CurrencyVault.CurrencyInfo({
             currencyID: 1,
-            currencyName: "EURO",
+            currencyName: "EUR",
             currencyCode: "EUR",
             currencyAddr: address(0x0),
             pythFeedID: EURUSD_PRICE_FEED_ID,

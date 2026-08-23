@@ -100,7 +100,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     // - User funds
     // - Liquidity Vault will be in this hook contract
     // - Trade ->  and user funds will be in a trade.sol file,
-    // TO make sure to differentirate  between those those assets, as we dont want user funds to get entagled and worry about
+    // TO make sure to differentirate  between those  assets, as we dont want user funds to get entagled and worry about
     // We dont even want to have a mishap happening.
     // this function serves as the basis of the protocol.
     // We do not want to lose liquidity instantly?
@@ -269,8 +269,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         uint160
     ) internal override returns (bytes4 selector_) {
         // check if it is the owner.
-        require(msg.sender == owner);
-        emit Testie(msg.sender, owner);
+        require(sender == owner);
         selector_ = IHooks.beforeInitialize.selector;
     }
 }

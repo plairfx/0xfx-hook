@@ -3,7 +3,7 @@
 import {Test} from "forge-std/Test.sol";
 import {USDC} from "../mocks/USDC.sol";
 import {MockPyth} from "../mocks/MockPyth.sol";
-import {CurrencyVault} from "../../src/0xfxCurrencyVault.sol";
+import {CurrencyVault, ICurrency} from "../../src/0xfxCurrencyVault.sol";
 
 pragma solidity ^0.8.22;
 
@@ -11,6 +11,7 @@ contract CurrencyVaultBase is Test {
     MockPyth pyth;
     USDC usdc;
     CurrencyVault cv;
+    ICurrency EUR;
 
     struct Permit {
         address owner;
@@ -32,7 +33,7 @@ contract CurrencyVaultBase is Test {
         pyth = new MockPyth(1, 1);
         CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
             currencyID: 0,
-            currencyName: "US DOLLAR",
+            currencyName: "USD",
             currencyCode: "USD",
             currencyAddr: address(0x0),
             pythFeedID: bytes32(0),
@@ -77,6 +78,13 @@ contract CurrencyVaultBase is Test {
         });
 
         cv.initCurrency(C);
+
+        // set USD and EUR
+        CurrencyVault.CurrencyInfo memory CIEUR = cv.getCurrencyInfo(1);
+        CurrencyVault.CurrencyInfo memory CIUSD = cv.getCurrencyInfo(1);
+
+        //
+        EUR = ICurrency(CIEUR.currencyAddr);
     }
 
     function mintAliceUSDC() public {
