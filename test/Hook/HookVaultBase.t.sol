@@ -31,8 +31,8 @@ contract HookVaultBase is Test, Deployers {
     using StateLibrary for IPoolManager;
     FxHook hook;
     USDC usdc;
-    CurrencyFX EUR;
-    CurrencyFX USD;
+    ICurrency EUR;
+    ICurrency USD;
 
     MockPyth pyth;
     CurrencyVault cv;
@@ -203,6 +203,13 @@ contract HookVaultBase is Test, Deployers {
         });
 
         cv.initCurrency(C);
+        // set USD and EUR
+        CurrencyVault.CurrencyInfo memory CIEUR = cv.getCurrencyInfo(1);
+        CurrencyVault.CurrencyInfo memory CIUSD = cv.getCurrencyInfo(1);
+
+        //
+        EUR = ICurrency(CIEUR.currencyAddr);
+        USD = ICurrency(CIUSD.currencyAddr);
     }
 
     function mintOwnerUSD() public {

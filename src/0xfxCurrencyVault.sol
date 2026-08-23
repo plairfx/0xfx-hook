@@ -35,6 +35,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
     }
 
     mapping(uint256 currencyID => CurrencyInfo) currencies;
+    mapping(address => uint256 currencyID) currencyIdInfo;
 
     event Deposited(
         address indexed user,
@@ -192,5 +193,9 @@ contract CurrencyVault is ReentrancyGuardTransient {
         uint256 cid
     ) public view returns (CurrencyInfo memory) {
         return currencies[cid];
+    }
+
+    function getCurrencyIDInfo(address cidAddr) public view returns (uint256) {
+        return currencyIdInfo[cidAddr];
     }
 }

@@ -46,12 +46,16 @@ import {
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ICurrency} from "./interfaces/ICurrency.sol";
+import {ICurrencyVault} from "./interfaces/ICurrencyVault.sol";
+import {ITrade} from "./interfaces/I0xfxTrade.sol";
 import {Lib} from "./utils/0xLib.sol";
 
 contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     ICurrency USDC;
+    ICurrencyVault ICV;
 
     using SafeERC20 for ICurrency;
+    using CurrencyLibrary for Currency;
 
     mapping(address => uint256) withdrawalCooldown;
 
@@ -270,6 +274,26 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     ) internal override returns (bytes4 selector_) {
         // check if it is the owner.
         require(sender == owner);
+
+        // both currencies need to be active inside the currencyVault!
+        //currency0
+
+        Lib.CurrencyInfo memory C0 = ICV.getCurrencyInfo(
+            ICV.getCurrencyIDInfo(Currency.unwrap((key.currency0)))
+        );
+
+        Lib.CurrencyInfo memory C1 = ICV.getCurrencyInfo(
+            ICV.getCurrencyIDInfo(Currency.unwrap((key.currency1)))
+        );
+
+        require(C0.active && C1.active);
+
+        // and pool can only be activated once! so poolAddr cannot be zero!
+        // pool should be active in the pool.
+
+        // done!. pool should be created.
+
+        // i think we will do this in the trade section.
         selector_ = IHooks.beforeInitialize.selector;
     }
 }

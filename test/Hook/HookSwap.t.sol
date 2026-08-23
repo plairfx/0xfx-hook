@@ -25,8 +25,8 @@ contract HookVaultTest is HookVaultBase {
 
         (uint160 sqrtPriceX962, int24 tick2, , ) = manager.getSlot0(poolId);
 
-        // uint256 EurBalanceBefore = EUR.balanceOf(owner);
-        // uint256 USDBalanceBefore = USD.balanceOf(account);
+        uint256 EurBalanceBefore = EUR.balanceOf(owner);
+        uint256 USDBalanceBefore = USD.balanceOf(owner);
 
         vm.startPrank(owner);
         PoolSwapTest.TestSettings memory TestSettings = PoolSwapTest
@@ -46,5 +46,21 @@ contract HookVaultTest is HookVaultBase {
             uint24 protocolFee,
             uint24 lpFee
         ) = manager.getSlot0(poolId);
+
+        // asserts
+        assertGt(EUR.balanceOf(owner), EurBalanceBefore);
+        assertGt(USD.balanceOf(owner), USDBalanceBefore);
     }
+
+    //Before swap implemenation:
+    // first we need to work on the Trade contract, but first
+    // lets make sure we are restricting other pools from interacting with this.
+
+    function test_SwapExecutesLimitOrders() public {}
+
+    function test_SwapExecutesTakeProfits() public {}
+
+    function test_SwapExecutesStoplosses() public {}
+
+    function test_SwapExecutesLiquidations() public {}
 }

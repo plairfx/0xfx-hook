@@ -50,7 +50,6 @@ contract HookVaultTest is HookVaultBase {
         assertEq(expectedShares, expectedShares2);
     }
 
-    function test_SetupWorks() public {}
     function test_DepositNotEnoughBalance() public {
         vm.startPrank(alice);
 
