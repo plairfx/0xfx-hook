@@ -15,6 +15,10 @@ library Lib {
         uint256 lastUpdated;
         bool active;
     }
+
+    struct PairInfo {
+        bool active;
+    }
     function getParsedSignature(
         bytes memory signature
     ) internal view returns (uint8, bytes32, bytes32) {

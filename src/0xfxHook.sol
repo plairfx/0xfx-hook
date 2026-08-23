@@ -53,6 +53,7 @@ import {Lib} from "./utils/0xLib.sol";
 contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     ICurrency USDC;
     ICurrencyVault ICV;
+    ITrade IT;
 
     using SafeERC20 for ICurrency;
     using CurrencyLibrary for Currency;
@@ -278,12 +279,17 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         // both currencies need to be active inside the currencyVault!
         //currency0
 
+        (address currency0, address currency1) = (
+            Currency.unwrap((key.currency0)),
+            Currency.unwrap((key.currency1))
+        );
+
         Lib.CurrencyInfo memory C0 = ICV.getCurrencyInfo(
-            ICV.getCurrencyIDInfo(Currency.unwrap((key.currency0)))
+            ICV.getCurrencyIDInfo(currency0)
         );
 
         Lib.CurrencyInfo memory C1 = ICV.getCurrencyInfo(
-            ICV.getCurrencyIDInfo(Currency.unwrap((key.currency1)))
+            ICV.getCurrencyIDInfo(currency1)
         );
 
         require(C0.active && C1.active);
@@ -292,6 +298,10 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         // pool should be active in the pool.
 
         // done!. pool should be created.
+
+        Lib.PairInfo memory P1 = IT.getPairInfo(currency0, currency1);
+
+        require(P1.active);
 
         // i think we will do this in the trade section.
         selector_ = IHooks.beforeInitialize.selector;
