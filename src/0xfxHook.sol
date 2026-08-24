@@ -48,6 +48,7 @@ import {
 import {ICurrency} from "./interfaces/ICurrency.sol";
 import {ICurrencyVault} from "./interfaces/ICurrencyVault.sol";
 import {ITrade} from "./interfaces/I0xfxTrade.sol";
+
 import {Lib} from "./utils/0xLib.sol";
 
 contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
@@ -64,11 +65,13 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         IPoolManager _IPM,
         address _USDC,
         address _owner,
-        address _currencyVault
+        address _currencyVault,
+        address _trade
     ) BaseHook(_IPM) ERC20("0xfx Liquidity Token", "0xfxLT") {
         USDC = ICurrency(address(_USDC));
         owner = _owner;
         ICV = ICurrencyVault(_currencyVault);
+        IT = ITrade(_trade);
     }
 
     uint256 immutable MAX_DEPOSIT_COOLDOWN = 30 days;
@@ -94,7 +97,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         uint256 amount
     );
 
-    event Testie(address sender, address msgsender);
+    event Testie(uint256);
 
     event CooldownPeriodChanged(uint256 oldCD, uint256 newCD);
 
@@ -276,11 +279,9 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         uint160
     ) internal override returns (bytes4 selector_) {
         // check if it is the owner.
-        require(sender == owner);
+        require(sender == owner, "Not the owner");
 
         // both currencies need to be active inside the currencyVault!
-        //currency0
-
         (address currency0, address currency1) = (
             Currency.unwrap((key.currency0)),
             Currency.unwrap((key.currency1))
@@ -294,18 +295,11 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
             ICV.getCurrencyIDInfo(currency1)
         );
 
-        require(C0.active && C1.active);
-
-        // and pool can only be activated once! so poolAddr cannot be zero!
-        // pool should be active in the pool.
-
-        // done!. pool should be created.
+        require(C0.active && C1.active, "Currency not active");
 
         Lib.PairInfo memory P1 = IT.getPairInfo(currency0, currency1);
+        require(P1.active, "Pair not Active");
 
-        require(P1.active);
-
-        // i think we will do this in the trade section.
         selector_ = IHooks.beforeInitialize.selector;
     }
 }

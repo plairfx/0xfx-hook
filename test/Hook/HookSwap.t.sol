@@ -48,7 +48,7 @@ contract HookVaultTest is HookVaultBase {
         ) = manager.getSlot0(poolId);
 
         // asserts
-        assertGt(EUR.balanceOf(owner), EurBalanceBefore);
+        assertGt(EurBalanceBefore, EUR.balanceOf(owner));
         assertGt(USD.balanceOf(owner), USDBalanceBefore);
     }
 

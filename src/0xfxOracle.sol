@@ -14,15 +14,7 @@ contract Oracle {
     function getCurrentPrice(
         bytes32 feedID,
         uint256 validTimeDistance
-    ) external returns (int256) {
-        PythStructs.Price memory price;
-
-        try pyth.getPriceNoOlderThan(feedID, validTimeDistance) {
-            price = pyth.getPriceNoOlderThan(feedID, validTimeDistance);
-        } catch {
-            // reverts if updatedTime - block.timestamp is less than  - age we set.
-            revert();
-        }
-        return price.price;
+    ) external returns (PythStructs.Price memory) {
+        return pyth.getPriceNoOlderThan(feedID, validTimeDistance);
     }
 }

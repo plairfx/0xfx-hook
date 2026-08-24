@@ -33,9 +33,10 @@ contract Trade {
 
     mapping(address => mapping(address => PairInfo)) pairInfo;
 
-    constructor(address _oracle, address _owner) {
+    constructor(address _oracle, address _owner, address _cv) {
         oracle = IOracle(_oracle);
         owner = _owner;
+        cv = ICurrencyVault(_cv);
     }
 
     // i need to also get the price from it? does it maybe not make sense to get the pairInfo fro the hook itself?
@@ -67,6 +68,17 @@ contract Trade {
 
         // Test if the actual feed even exists...
         getCurrentPrice(PI.pythFeed, 60); // 60 seconds..
+
+        PairInfo storage Pe = pairInfo[baseCurrency][quoteCurrency];
+
+        Pe.active = true;
+        Pe.pythFeed = PI.pythFeed;
+        Pe.PairName = PI.PairName;
+        Pe.baseCurrencyID = PI.baseCurrencyID;
+        Pe.quoteCurrencyID = PI.quoteCurrencyID;
+        Pe.updatedAt = block.timestamp;
+
+        // @Importanat @DO we initialzie price now?
 
         emit PairInitialized(baseCurrency, quoteCurrency);
     }

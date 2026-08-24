@@ -15,6 +15,8 @@ contract HookVaultTest is HookVaultBase {
         assertEq(hook.asset(), address(usdc));
     }
 
+    function test_Setup() public {}
+
     function test_DepositWorks() public {
         usdc.mint(alice, depositAmount);
 

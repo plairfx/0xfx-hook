@@ -36,6 +36,7 @@ contract HookVaultBase is Test, Deployers {
     ICurrency EUR;
     ICurrency USD;
     Oracle oracle;
+    Trade trade;
 
     MockPyth pyth;
     CurrencyVault cv;
@@ -63,7 +64,7 @@ contract HookVaultBase is Test, Deployers {
         pyth = new MockPyth(1, 1);
         oracle = new Oracle(address(pyth));
         CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
-            currencyID: 2,
+            currencyID: 0,
             currencyName: "USD DOLLAR", // this is what i guess makes it bigger? // for now i amke this smaller, as we want this to be smaller>>
             currencyCode: "USD",
             currencyAddr: address(0x0),
@@ -73,7 +74,7 @@ contract HookVaultBase is Test, Deployers {
             active: true
         });
         cv = new CurrencyVault(address(oracle), address(usdc), owner, CI);
-
+        trade = new Trade(address(oracle), owner, address(cv));
         // we will have EUR an
         initializeVaultAndPythEUR();
 
@@ -84,25 +85,48 @@ contract HookVaultBase is Test, Deployers {
 
         deployCodeTo(
             "src/0xfxHook.sol",
-            abi.encode(manager, address(usdc), owner, address(cv)),
+            abi.encode(
+                manager,
+                address(usdc),
+                owner,
+                address(cv),
+                address(trade)
+            ),
             hookAddress
         );
 
         hook = FxHook(hookAddress);
         (alice, alicePK) = makeAddrAndKey("alice");
 
-        approveTokens(ICurrency(0xDBe2aD6459fbf0ca2895bCd875c7133349143CBD));
-        approveTokens(ICurrency(0xB8CB40a1A898925C594a5b64494AD34EE3027B1a));
+        approveTokens(USD);
+        approveTokens(EUR);
 
         Currency currency2 = Currency.wrap(
-            0xDBe2aD6459fbf0ca2895bCd875c7133349143CBD
+            0x8006DD5dd5819d39124aBad41EEE440A3f1C373e
         );
 
         Currency currency3 = Currency.wrap(
-            0xB8CB40a1A898925C594a5b64494AD34EE3027B1a
+            0x0552d275e243b4eE8779aDD4D65528E5b95Adc73
         );
 
+        // initialize Pair inside trade contract
+
         vm.startPrank(owner);
+        Trade.PairInfo memory PI = Trade.PairInfo({
+            baseCurrencyID: 1,
+            quoteCurrencyID: 0,
+            PairName: "EURUSD",
+            lastPrice: 0,
+            pythFeed: EURUSD_PRICE_FEED_ID,
+            updatedAt: block.timestamp,
+            active: true
+        });
+        trade.initializePair(
+            PI,
+            Currency.unwrap(currency3),
+            Currency.unwrap(currency2)
+        );
+
         (key, ) = initPool(
             currency3, // EUR
             currency2, // USD
@@ -123,14 +147,8 @@ contract HookVaultBase is Test, Deployers {
         vm.startPrank(address(cv));
 
         // minting eur and usd to owner.
-        ICurrency(0xDBe2aD6459fbf0ca2895bCd875c7133349143CBD).mint(
-            50e17,
-            owner
-        );
-        ICurrency(0xB8CB40a1A898925C594a5b64494AD34EE3027B1a).mint(
-            50e17,
-            owner
-        );
+        EUR.mint(50e17, owner);
+        USD.mint(50e17, owner);
 
         vm.startPrank(owner);
 
@@ -209,9 +227,8 @@ contract HookVaultBase is Test, Deployers {
         cv.initCurrency(C);
         // set USD and EUR
         CurrencyVault.CurrencyInfo memory CIEUR = cv.getCurrencyInfo(1);
-        CurrencyVault.CurrencyInfo memory CIUSD = cv.getCurrencyInfo(1);
+        CurrencyVault.CurrencyInfo memory CIUSD = cv.getCurrencyInfo(0);
 
-        //
         EUR = ICurrency(CIEUR.currencyAddr);
         USD = ICurrency(CIUSD.currencyAddr);
     }

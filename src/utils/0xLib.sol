@@ -17,6 +17,12 @@ library Lib {
     }
 
     struct PairInfo {
+        uint256 baseCurrencyID;
+        uint256 quoteCurrencyID;
+        string PairName;
+        uint256 lastPrice;
+        bytes32 pythFeed;
+        uint256 updatedAt;
         bool active;
     }
     function getParsedSignature(
