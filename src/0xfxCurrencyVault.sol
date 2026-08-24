@@ -3,6 +3,7 @@
 import {CurrencyFX} from "./0xfxCurrency.sol";
 import {ICurrency} from "./interfaces/ICurrency.sol";
 import {IPyth, PythStructs} from "./interfaces/Pyth/IPyth.sol";
+import {IOracle} from "./interfaces/IOracle.sol";
 
 import {
     ReentrancyGuardTransient
@@ -16,7 +17,8 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 pragma solidity ^0.8.22;
 contract CurrencyVault is ReentrancyGuardTransient {
     using SafeERC20 for ICurrency;
-    IPyth pyth;
+
+    IOracle oracle;
     ICurrency currency;
 
     address owner;
@@ -57,12 +59,12 @@ contract CurrencyVault is ReentrancyGuardTransient {
 
     /// @notice initializes the pyth oracle, usdc and owner.
     constructor(
-        address pythAddress,
+        address _oracle,
         address usdc,
         address _owner,
         CurrencyInfo memory C
     ) {
-        pyth = IPyth(pythAddress);
+        oracle = IOracle(_oracle);
         USDC = usdc;
         owner = _owner;
 
@@ -170,8 +172,8 @@ contract CurrencyVault is ReentrancyGuardTransient {
     function getCurrentPrice(bytes32 feedID) internal view returns (int256) {
         PythStructs.Price memory price;
 
-        try pyth.getPriceNoOlderThan(feedID, valid_time_distance) {
-            price = pyth.getPriceNoOlderThan(feedID, valid_time_distance);
+        try oracle.getCurrentPrice(feedID, valid_time_distance) {
+            price = oracle.getCurrentPrice(feedID, valid_time_distance);
         } catch {
             // reverts if updatedTime - block.timestamp is less than  - age we set.
             revert();

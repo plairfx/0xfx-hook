@@ -63,10 +63,12 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     constructor(
         IPoolManager _IPM,
         address _USDC,
-        address _owner
+        address _owner,
+        address _currencyVault
     ) BaseHook(_IPM) ERC20("0xfx Liquidity Token", "0xfxLT") {
         USDC = ICurrency(address(_USDC));
         owner = _owner;
+        ICV = ICurrencyVault(_currencyVault);
     }
 
     uint256 immutable MAX_DEPOSIT_COOLDOWN = 30 days;

@@ -7,6 +7,8 @@ import {CurrencyFX} from "../../src/0xfxCurrency.sol";
 import {MockPyth} from "../mocks/MockPyth.sol";
 import {CurrencyVault} from "../../src/0xfxCurrencyVault.sol";
 import {ICurrency} from "../../src/interfaces/ICurrency.sol";
+import {Trade} from "../../src/0xfxTrade.sol";
+import {Oracle} from "../../src/0xfxOracle.sol";
 
 // Uniswap related;
 import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
@@ -33,6 +35,7 @@ contract HookVaultBase is Test, Deployers {
     USDC usdc;
     ICurrency EUR;
     ICurrency USD;
+    Oracle oracle;
 
     MockPyth pyth;
     CurrencyVault cv;
@@ -58,6 +61,7 @@ contract HookVaultBase is Test, Deployers {
         usdc = new USDC();
         // initializing needed currencyVault..
         pyth = new MockPyth(1, 1);
+        oracle = new Oracle(address(pyth));
         CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
             currencyID: 2,
             currencyName: "USD DOLLAR", // this is what i guess makes it bigger? // for now i amke this smaller, as we want this to be smaller>>
@@ -68,7 +72,7 @@ contract HookVaultBase is Test, Deployers {
             lastUpdated: block.timestamp,
             active: true
         });
-        cv = new CurrencyVault(address(pyth), address(usdc), owner, CI);
+        cv = new CurrencyVault(address(oracle), address(usdc), owner, CI);
 
         // we will have EUR an
         initializeVaultAndPythEUR();
@@ -80,7 +84,7 @@ contract HookVaultBase is Test, Deployers {
 
         deployCodeTo(
             "src/0xfxHook.sol",
-            abi.encode(manager, address(usdc), owner),
+            abi.encode(manager, address(usdc), owner, address(cv)),
             hookAddress
         );
 

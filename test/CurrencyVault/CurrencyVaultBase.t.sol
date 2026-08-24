@@ -4,6 +4,7 @@ import {Test} from "forge-std/Test.sol";
 import {USDC} from "../mocks/USDC.sol";
 import {MockPyth} from "../mocks/MockPyth.sol";
 import {CurrencyVault, ICurrency} from "../../src/0xfxCurrencyVault.sol";
+import {Oracle} from "../../src/0xfxOracle.sol";
 
 pragma solidity ^0.8.22;
 
@@ -12,6 +13,7 @@ contract CurrencyVaultBase is Test {
     USDC usdc;
     CurrencyVault cv;
     ICurrency EUR;
+    Oracle oracle;
 
     struct Permit {
         address owner;
@@ -31,6 +33,8 @@ contract CurrencyVaultBase is Test {
     function setUp() external {
         usdc = new USDC();
         pyth = new MockPyth(1, 1);
+        oracle = new Oracle(address(pyth));
+
         CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
             currencyID: 0,
             currencyName: "USD",
@@ -41,7 +45,7 @@ contract CurrencyVaultBase is Test {
             lastUpdated: block.timestamp,
             active: true
         });
-        cv = new CurrencyVault(address(pyth), address(usdc), owner, CI);
+        cv = new CurrencyVault(address(oracle), address(usdc), owner, CI);
 
         (alice, alicePK) = makeAddrAndKey("alice");
     }
