@@ -210,8 +210,8 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
                 afterAddLiquidity: false,
                 beforeRemoveLiquidity: false,
                 afterRemoveLiquidity: false,
-                beforeSwap: true,
-                afterSwap: false,
+                beforeSwap: false,
+                afterSwap: true,
                 beforeDonate: false,
                 afterDonate: false,
                 beforeSwapReturnDelta: false,
@@ -260,17 +260,14 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         return _user == owner;
     }
 
-    function _beforeSwap(
+    function _afterSwap(
         address,
         PoolKey calldata key,
         SwapParams calldata P,
+        BalanceDelta,
         bytes calldata
-    )
-        internal
-        override
-        returns (bytes4 selector_, BeforeSwapDelta bfd_, uint24 _swapFee)
-    {
-        selector_ = IHooks.beforeSwap.selector;
+    ) internal override returns (bytes4 selector_, int128) {
+        selector_ = IHooks.afterSwap.selector;
     }
 
     function _beforeInitialize(

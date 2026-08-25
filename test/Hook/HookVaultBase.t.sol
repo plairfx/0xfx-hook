@@ -80,7 +80,7 @@ contract HookVaultBase is Test, Deployers {
 
         // testie..
         address hookAddress = address(
-            uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG)
+            uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_SWAP_FLAG)
         );
 
         deployCodeTo(
