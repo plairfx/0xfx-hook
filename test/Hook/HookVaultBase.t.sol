@@ -161,10 +161,10 @@ contract HookVaultBase is Test, Deployers {
             ModifyLiquidityParams({
                 tickLower: TickMath.getTickAtSqrtPrice(
                     85549908060000000000000000000
-                ) - 10,
+                ) - 50,
                 tickUpper: TickMath.getTickAtSqrtPrice(
                     85549908060000000000000000000
-                ) + 10,
+                ) + 50,
                 liquidityDelta: 100 ether,
                 salt: bytes32(0)
             }),

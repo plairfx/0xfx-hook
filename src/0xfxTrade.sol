@@ -4,6 +4,8 @@ import {IOracle} from "./interfaces/IOracle.sol";
 import {ICurrencyVault} from "./interfaces/ICurrencyVault.sol";
 import {Lib} from "./utils/0xLib.sol";
 import {PythStructs} from "./interfaces/Pyth/IPyth.sol";
+import {Heap} from "@openzeppelin/contracts/utils/structs/Heap.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 
 pragma solidity ^0.8.22;
 
@@ -14,6 +16,7 @@ contract Trade {
         uint256 baseCurrencyID;
         uint256 quoteCurrencyID;
         string PairName;
+        // PoolKey pk; // add this later.
         uint256 lastPrice;
         bytes32 pythFeed;
         uint256 updatedAt;
@@ -35,10 +38,10 @@ contract Trade {
         _;
     }
 
+    mapping(uint256 pairID => mapping(uint24 tick => mapping(uint24 tickRange => Heap.Uint256Heap))) priceInfo;
+    // So lets assume
+
     mapping(address => mapping(address => PairInfo)) pairInfo;
-    // mappings for all the orders? => array or something?
-    // and afterwards we check if the orders are already fulfilled or not.
-    // mapping poolsKeys? => so we can get the lastTickPrice.
 
     constructor(address _oracle, address _owner, address _cv) {
         oracle = IOracle(_oracle);
@@ -84,40 +87,104 @@ contract Trade {
     // How will we treat limt orde rprices that have already been crossed? with the price update.
     // Add @signatures, so that the trading experience will already be nice, with the EIP712 + ECDSA with the other EIPS. (Signature EOA ETC).
 
+    // Heaps
+    // just have to see and understand how like, multiple heaps woiuld workout.
+
+    //BEcause they would, work out ina  sense,
+
+    //Verify if a trade is valid and possible
+
+    // Execute swap,
+
+    //AfterSwap checks if another trade is possible.
+
+    //But with the heaps, if we have multiple heaps, how would search through all of them?TIck Price - Change in Price, is the price we want to search for. This would be all the heaps
+
+    //mapping(tickprice=> Heap) heaps;
+
+    //if we want to search an heap heap[tickPrice], but if the price change is 50 ticks, it will be 50 heaps to search for..
+
+    // We need to group ticks together, in sense where we have to leap through as least as possible heaps. THis will make everything
+    // Understanding this is the priority: What is a valid tickRange we can swipe through?
+    // Without making too much of a thing, if an heap is empty we go through the next.
+    // This will workout, for sure.
+
     // can only be the HOOK!
-    function beforeTrade() external {
-        // How do we intend to handle FIFO orderbook?
-        // Because if we are meant to handle, the first coming order.
-        // Not all orders are able to be handled,
-        // Sort out orders, first ones in, will be handled first?
-        // If there is any market impact during that order.
-        // users that are later can be out at a worse price than expected,  becauase it is all depended uppon the pools price.
-        // get all the orders at the price.
-        // execute the ones with the earliest block.timestamp.
-        // get the currentPrice?
-        // If we have only BeforeSwap,  it will be executed whenever a new 'trade happens' while the price lays low upon that level.
-        // if we do afterswap, we have 2 moments to focus upon.
-        // I am an user that wants to buy 100 EUR/USD,
-        // if the beforeSwap handles this and executes 100's of orders , this swap will revert 99% of the time.
-        // the prpoblem with this would be litteraly be, users will be priced out and the function could get DOS, depending on the how many uhm//
-        // orders there are in the price range.
-        // If we implement it as an afterSwap, we would be able to execute it at the price after the swap without impacting the user tha tis swapping
-        // with reverting as his LImitSqrtPricex96 is reached.
-        // we initiate the cycle by the first afterSwap -> this will always initiate a swap.
-        // But the hting i am having a problem with:
-        // WE need to know the first order of all types or orders;
-        // Limits, takeprofit,
-        // Liquidations first after an swap,
-        // Becuase liquidatons are the most important to safekeep the vault from experiencing a bigger loss.
-        // FIFO?
-        // combine all orders (Last price + change of price) in that sort we will get all the orders.
-        // Whenever the first orders is executed, -> afterSwap will be executed again ->
-        // get all orders within the priceRange, safe the last orders, and add the last used price +- the change, and
-        // get those new orders.
-        // This loop will continue until?
-        // - no orders are remaining within the priceRange.
-        // using the tickPrice/LastTickprice.
-        // This is a good one...
+    function afterTrade(
+        int24 tick,
+        uint160 sqrtPricex96,
+        PoolKey calldata key
+    ) external {
+        // int24 tick:
+        // sqrtPricex96:
+        // calculate the tickRange..
+        // tickRange ->  betwene tickrange.
+        // get the max range to the upperTick, and the min range down tot he lowerTick;
+        // With this we are able to -> write
+        // Limit Order..
+        // Limit order comes in, at 1535, but the tickprice is 1536,
+        // If the price goes to 1535, but the limit is registered at 1535?
+        // How do we make sure the user still get executed in this example?
+        //  We check the lower ranges aswell to see if there are orders registered at those prices.
+        // SO lets say there is a 1535 limit order at the tickRange 10 which is 1534.5,
+        // this si normally, but we will go into the both
+        // higher and lower tick ranges and mkae sure they are executed.
+        // In this case we have a preference towardst he currentTick.
+        // We wil both get three values, of the tickrange between the sqrtPricex96 we have.
+        // Whenever a trade is ranged towards we will pick the earliest trade set and execute that first.
+        // TickRange 1535,
+        // we will take 1533 t/m 1536, but depending ont he rpice really,
+        // depended on the price which is set by the user.
+        // SqrtPriceX96 = 1.16500 is between 1534 and 1535
+        // TickRange = 1535
+        // CurrentSQRTPRICEX96 = 1.16500 // gett he tickrange
+        // getMappingInfo, Earliest order from the heap + previous tick heap that also has orders there.
+        // Goal= finish the logic of limit order/stoploss/take profit/
+        // These 4 should be very smiliar in terms of logic as they are the orders hat need to be executed.
+        // Situation:
+        // We have 3 orders:
+        // Limit order 1534: tickRange: 1 of 10. last
+        // Stoploss at 1534: tickrange 9 of 10. eseond earlierst
+        // Limit order 1534: tickrange 9 of 10. Earliest BUY
+        // Price goes to 1533 tickrange 8/10  ->
+        // Execute limit Order, that are buys -> so tick + price range, and execute the earliest of them all.
+        // Dpeendig on the price omvement it might get a lot of tick ranges,
+    }
+
+    function trade(uint160 sqrtPriceX96, uint256 pairID) external {
+        // limit order placed..
+
+        uint160 currentSqrtpricex96;
+        int24 userTick;
+
+        // check if its a long/short, and if its straigth up executbale
+        // get the 2 ticks -1
+
+        int24 previoustick;
+        userTick - 1;
+        int24 nextTick = userTick + 1;
+
+        // get both SqrtPricesRanges.
+        // we put either 0-10 or -1 -> -10
+        uint160 lowerTickPrevPrice;
+        uint160 higherTickNextPrice;
+
+        uint160 previousTickPricePlus1 = sqrtPriceX96 - lowerTickPrevPrice / 10;
+        uint160 higherTickPriceMinus1 = sqrtPriceX96 - higherTickNextPrice / 10;
+
+        int userTickRange;
+
+        // make a formula that gets the users range
+        //  -9, which means 1 tickRange of the previosu tick.
+
+        // priceInfo[pairId][userTick][-9] put here into the heap the user's
+        // orderID.
+
+        // and voila it should be agood one fort his.
+
+        // @amke sure to check the math with this. and double check the formulas.
+
+        // // put it into a mapping.
     }
 
     function initializePair(

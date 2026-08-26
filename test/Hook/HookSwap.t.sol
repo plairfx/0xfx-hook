@@ -24,7 +24,7 @@ contract HookVaultTest is HookVaultBase {
         PoolId poolId = key.toId();
 
         (uint160 sqrtPriceX962, int24 tick2, , ) = manager.getSlot0(poolId);
-
+        console.log("tickPrice Before", sqrtPriceX962);
         uint256 EurBalanceBefore = EUR.balanceOf(owner);
         uint256 USDBalanceBefore = USD.balanceOf(owner);
 
@@ -34,7 +34,7 @@ contract HookVaultTest is HookVaultBase {
 
         SwapParams memory params = SwapParams({
             zeroForOne: true,
-            amountSpecified: -1e6, // we want to swap 10 EUR > 11.16590 USD!
+            amountSpecified: -50e14, // we want to swap 10 EUR > 11.16590 USD!
             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
         });
 
@@ -46,7 +46,12 @@ contract HookVaultTest is HookVaultBase {
             uint24 protocolFee,
             uint24 lpFee
         ) = manager.getSlot0(poolId);
+        console.log("tickPrice After", tick);
 
+        console.log(
+            "Convert TickRange",
+            TickMath.getTickAtSqrtPrice(TickMath.getSqrtPriceAtTick(1533)) // 1834
+        );
         // asserts
         assertGt(EurBalanceBefore, EUR.balanceOf(owner));
         assertGt(USD.balanceOf(owner), USDBalanceBefore);
