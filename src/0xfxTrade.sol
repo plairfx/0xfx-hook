@@ -6,12 +6,16 @@ import {Lib} from "./utils/0xLib.sol";
 import {PythStructs} from "./interfaces/Pyth/IPyth.sol";
 import {Heap} from "@openzeppelin/contracts/utils/structs/Heap.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
+import {TickMath} from "v4-core/libraries/TickMath.sol";
+import {Sign} from "./utils/0xSignature.sol";
 
 pragma solidity ^0.8.22;
 
-contract Trade {
+contract Trade is Sign {
     IOracle oracle;
     ICurrencyVault cv;
+
     struct PairInfo {
         uint256 baseCurrencyID;
         uint256 quoteCurrencyID;
@@ -23,10 +27,24 @@ contract Trade {
         bool active;
     }
 
-    // liquidity?
+    struct TradeInfo {
+        uint256 oid;
+        uint256 pairID;
+        address user;
+        uint256 lotSize;
+        bool short;
+        uint160 entry;
+        uint160 stoploss;
+        uint160 takeProfit;
+        uint256 marginUsed;
+        uint256 entryTime;
+    }
 
+    // liquidity?
+    event LimitPlaced();
     address owner;
     uint256 lastTickPrice;
+    uint256 orderID;
 
     event PairInitialized(
         address indexed baseCurrency,
@@ -37,8 +55,10 @@ contract Trade {
         require(checkOwner(), "Not the owner");
         _;
     }
+    uint24 tickLength = 20;
 
-    mapping(uint256 pairID => mapping(uint24 tick => mapping(uint24 tickRange => Heap.Uint256Heap))) priceInfo;
+    mapping(uint256 pairID => mapping(int24 tick => mapping(int24 tickRange => Heap.Uint256Heap))) priceInfo;
+    mapping(uint256 oid => TradeInfo) tradeInfo;
     // So lets assume
 
     mapping(address => mapping(address => PairInfo)) pairInfo;
@@ -149,42 +169,120 @@ contract Trade {
         // Price goes to 1533 tickrange 8/10  ->
         // Execute limit Order, that are buys -> so tick + price range, and execute the earliest of them all.
         // Dpeendig on the price omvement it might get a lot of tick ranges,
+        // FIrst we get the tickRange, currently
+        // bool short; // we need to get the right order for this aswell tbh.
+        // getTickRange(sqrtPriceX96, short);
     }
 
-    function trade(uint160 sqrtPriceX96, uint256 pairID) external {
-        // limit order placed..
+    // MarketOrder
+    // Limit Order
+    // CancelOrder
+    // ModifyOrdr
+    // ModifyPosition
+    // Close Position
+    function trade(TradeRequest memory TR, bytes memory signature) external {
+        // VerifySignature first.
+        require(
+            Sign.getSigner(signature, Sign.getTradeHash(TR), TR.user),
+            "Invalid Signature/Signer"
+        );
+        // Check if user has enough USDC deposited.
 
-        uint160 currentSqrtpricex96;
-        int24 userTick;
+        if (TR.orderType == 0 || TR.orderType == 1) {
+            orderID++;
 
-        // check if its a long/short, and if its straigth up executbale
-        // get the 2 ticks -1
+            (uint160 currentSqrtPricex96, , , ) = getSlot0Info(TR.pairID);
 
-        int24 previoustick;
-        userTick - 1;
-        int24 nextTick = userTick + 1;
+            if (
+                (currentSqrtPricex96 >= TR.ENTRY_sqrtPriceX96 && !TR.short) ||
+                ((TR.ENTRY_sqrtPriceX96 >= currentSqrtPricex96 && TR.short) ||
+                    TR.orderType == 0)
+            ) {
+                // marketOrder..
+            } else {
+                // limit Order..
+                (int24 tick, int24 tickRange) = getTickRange(
+                    TR.ENTRY_sqrtPriceX96,
+                    TR.short
+                );
 
-        // get both SqrtPricesRanges.
-        // we put either 0-10 or -1 -> -10
-        uint160 lowerTickPrevPrice;
-        uint160 higherTickNextPrice;
+                Heap.Uint256Heap storage H = priceInfo[TR.pairID][tick][
+                    tickRange
+                ];
+                Heap.insert(H, orderID);
 
-        uint160 previousTickPricePlus1 = sqrtPriceX96 - lowerTickPrevPrice / 10;
-        uint160 higherTickPriceMinus1 = sqrtPriceX96 - higherTickNextPrice / 10;
+                uint256 margin;
+                tradeInfo[orderID] = TradeInfo({
+                    oid: orderID,
+                    pairID: TR.pairID,
+                    user: TR.user,
+                    lotSize: TR.lotSize,
+                    short: TR.short,
+                    entry: TR.ENTRY_sqrtPriceX96,
+                    stoploss: TR.SL_sqrtPriceX96,
+                    takeProfit: TR.TP_sqrtPriceX96,
+                    marginUsed: margin,
+                    entryTime: block.timestamp
+                });
 
-        int userTickRange;
+                emit LimitPlaced();
+            }
 
-        // make a formula that gets the users range
-        //  -9, which means 1 tickRange of the previosu tick.
+            // we will add the forex ufnctionallity later,
+            // now we add the orderkeeping firs
 
-        // priceInfo[pairId][userTick][-9] put here into the heap the user's
-        // orderID.
+            // add logic of the mapping etc.
 
-        // and voila it should be agood one fort his.
+            // whenever a trade happens, we make sure we execute it between these ranges aswell..
 
-        // @amke sure to check the math with this. and double check the formulas.
+            // so if a tick moves 1 up, -> we will execute the first, and see if the others are in range..
+        } else if (TR.orderType == 2 || TR.orderType == 3) {
+            // cancel order && modifyOrder
+        } else {
+            // modifyPosition & closePosition.
+        }
+    }
 
-        // // put it into a mapping.
+    function getTickRange(
+        uint160 sqrtPriceX96,
+        bool short
+    ) internal view returns (int24, int24) {
+        int24 userTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96);
+
+        uint160 prevTickPrice = TickMath.getSqrtPriceAtTick(userTick - 1) + 1; // -1
+        uint160 nextTickprice = TickMath.getSqrtPriceAtTick(userTick + 1) - 1; // -1
+
+        uint24 tickInterval;
+
+        tickInterval = uint24((nextTickprice - prevTickPrice) / tickLength);
+
+        uint256 tickIntervalUser = uint160(sqrtPriceX96 - prevTickPrice);
+
+        if (short) {
+            return (
+                userTick,
+                int24(
+                    int256(
+                        FixedPointMathLib.divWadUp(
+                            tickIntervalUser,
+                            tickInterval
+                        ) / 1e18
+                    )
+                )
+            );
+        } else {
+            return (
+                userTick,
+                int24(
+                    int256(
+                        FixedPointMathLib.sDivWad(
+                            int256(tickIntervalUser),
+                            int256(int24(tickInterval))
+                        ) / 1e18
+                    )
+                )
+            );
+        }
     }
 
     function initializePair(
@@ -244,5 +342,20 @@ contract Trade {
         address currency1
     ) public view returns (PairInfo memory) {
         return pairInfo[currency0][currency1];
+    }
+
+    function getSlot0Info(
+        uint256 pairID
+    )
+        internal
+        view
+        returns (
+            uint160 sqrtPriceX96,
+            int24 tick,
+            uint24 protocolFee,
+            uint24 lpFee
+        )
+    {
+        // call the hookInfo function.
     }
 }

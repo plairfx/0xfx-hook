@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 pragma solidity ^0.8.22;
 
 library Lib {
@@ -25,6 +25,7 @@ library Lib {
         uint256 updatedAt;
         bool active;
     }
+
     function getParsedSignature(
         bytes memory signature
     ) internal view returns (uint8, bytes32, bytes32) {
