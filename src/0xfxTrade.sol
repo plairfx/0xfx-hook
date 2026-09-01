@@ -4,24 +4,40 @@ pragma solidity ^0.8.22;
 
 import {IOracle} from "./interfaces/IOracle.sol";
 import {IStorage} from "./interfaces/I0xfxStorage.sol";
+import {IHook} from "./interfaces/I0xfxHook.sol";
 import {ICurrencyVault} from "./interfaces/ICurrencyVault.sol";
 import {Lib} from "./utils/0xLib.sol";
 import {PythStructs} from "./interfaces/Pyth/IPyth.sol";
-
+import {
+    ModifyLiquidityParams,
+    SwapParams
+} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
 import {
     Currency,
     CurrencyLibrary
 } from "@uniswap/v4-core/src/types/Currency.sol";
+import {SwapMath} from "@uniswap/v4-core/src/libraries/SwapMath.sol";
 import {Sign} from "./utils/0xSignature.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+
+import {ICurrency} from "./interfaces/ICurrency.sol";
 
 contract Trade is Sign {
     IOracle oracle;
+    ICurrency USD;
     ICurrencyVault cv;
     IStorage store;
+    IHook hook;
+    IPoolManager manager;
+    using StateLibrary for IPoolManager;
     using CurrencyLibrary for Currency;
+    using PoolIdLibrary for PoolKey;
 
     struct PairInfo {
         uint256 baseCurrencyID;
@@ -35,6 +51,7 @@ contract Trade is Sign {
         bool active;
     }
 
+    bytes constant ZERO_BYTES = new bytes(0);
     struct TradeInfo {
         uint256 oid;
         uint256 pairID;
@@ -58,6 +75,12 @@ contract Trade is Sign {
 
     // liquidity?
     event LimitPlaced();
+
+    event Deposited(
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount
+    );
     address owner;
     uint256 lastTickPrice;
     uint256 orderID;
@@ -99,9 +122,10 @@ contract Trade is Sign {
         ].pairID;
         (int24 userTick, int24 tickrange) = getTickRange(sqrtPricex96, false);
         uint256 oidToExecute;
+        TradeInfo memory TI;
         try store.getFirstOrderOut(pairID, tick, tickrange) {
             // check user's margin..
-            TradeInfo memory TI = tradeInfo[oidToExecute];
+            TI = tradeInfo[oidToExecute];
             if (doesUserHaveEnoughMargin(TI.user)) {
                 oidToExecute = store.popFirstOrder(pairID, tick, tickrange);
             } else {
@@ -110,10 +134,85 @@ contract Trade is Sign {
         } catch {
             return;
         }
+        PoolId poolId = key.toId();
 
-        // check if the vault has enough liquidity to execute...
+        // get the expected price, without any fees
+        // to calculate the currentPrice of the lotSize calculation.
 
-        // execute the swap.
+        (, uint256 c0out, uint256 c1In, ) = SwapMath.computeSwapStep({
+            sqrtPriceCurrentX96: sqrtPricex96,
+            sqrtPriceTargetX96: 4295128739 + 1,
+            liquidity: manager.getLiquidity(key.toId()),
+            amountRemaining: 1000000,
+            feePips: 0
+        });
+
+        // get the amountSpecified that we want to use,
+        // Lotsize * 1e6 if short
+        // Else  example: Lotsize * c1In(1.17570).
+        int amountSpecified = int256(TI.lotSize) *
+            int256((TI.short ? 1e6 : c1In));
+
+        BalanceDelta BD = hook.swap(
+            key,
+            SwapParams({
+                zeroForOne: TI.short ? false : true,
+                amountSpecified: amountSpecified,
+                sqrtPriceLimitX96: 4295128739 + 1
+            }),
+            ZERO_BYTES
+        );
+
+        // add to position etc..
+        TradeInfo storage te = tradeInfo[oidToExecute];
+        te.entryTime = block.timestamp;
+
+        // Logic here:
+        // If short we sell, meaning ->  amount0 is gonna be negative, so we want to get rid of EUR
+        // and vice versa.
+        te.entry = uint160(
+            uint128(
+                te.short
+                    ? -BD.amount0() / BD.amount1()
+                    : BD.amount0() / -BD.amount1()
+            )
+        );
+    }
+
+    function depositUSD(
+        address receiver,
+        uint256 amount,
+        uint256 deadline,
+        bytes memory signature
+    ) external {
+        // checks
+        require(
+            USD.balanceOf(msg.sender) >= amount && amount > 0,
+            "Not Enough Balance"
+        );
+
+        userInfo storage UI = userInfo[receiver];
+        UI.balance += amount;
+        UI.equity += amount;
+        UI.freeMargin += amount;
+
+        (uint8 v, bytes32 r, bytes32 s) = Lib.getParsedSignature(signature);
+
+        if (deadline != 0) {
+            USD.permit(
+                msg.sender,
+                address(this),
+                usdcAmount,
+                deadline,
+                v,
+                r,
+                s
+            );
+        }
+
+        USD.safeTransferFrom(msg.sender, address(this), amount);
+
+        emit Deposited(msg.sender, msg.sender, amount);
     }
 
     // MarketOrder

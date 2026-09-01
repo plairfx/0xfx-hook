@@ -60,6 +60,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     using CurrencyLibrary for Currency;
 
     mapping(address => uint256) withdrawalCooldown;
+    bytes constant ZERO_BYTES2 = new bytes(0);
 
     constructor(
         IPoolManager _IPM,
@@ -74,6 +75,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         IT = ITrade(_trade);
     }
 
+    // approve maxUint256 for all pairs approved, in this contract.
     uint256 immutable MAX_DEPOSIT_COOLDOWN = 30 days;
     uint256 currentDepositCoolDown = 3 days;
 
@@ -119,6 +121,15 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     // The reasonign behind all of this is ->
     // Every swap inside the beforeSwap will trigger: Limit orders, Take profits, Stoplosses, and Liquidation.
     // We stilll have to get and create the contract for that.
+
+    function swap(
+        PoolKey memory key,
+        SwapParams memory params,
+        bytes calldata hookData
+    ) external {
+        // @add access control
+        return poolManager.swap(key, params, ZERO_BYTES2);
+    }
 
     function deposit(
         uint256 usdcAmount,
