@@ -126,7 +126,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         PoolKey memory key,
         SwapParams memory params,
         bytes calldata hookData
-    ) external {
+    ) external returns (BalanceDelta) {
         // @add access control
         return poolManager.swap(key, params, ZERO_BYTES2);
     }

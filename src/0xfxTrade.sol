@@ -25,6 +25,10 @@ import {Sign} from "./utils/0xSignature.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {
+    SafeERC20,
+    IERC20
+} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ICurrency} from "./interfaces/ICurrency.sol";
 
@@ -38,6 +42,7 @@ contract Trade is Sign {
     using StateLibrary for IPoolManager;
     using CurrencyLibrary for Currency;
     using PoolIdLibrary for PoolKey;
+    using SafeERC20 for ICurrency;
 
     struct PairInfo {
         uint256 baseCurrencyID;
@@ -191,7 +196,7 @@ contract Trade is Sign {
             "Not Enough Balance"
         );
 
-        userInfo storage UI = userInfo[receiver];
+        UserInfo storage UI = userInfo[receiver];
         UI.balance += amount;
         UI.equity += amount;
         UI.freeMargin += amount;
@@ -199,15 +204,7 @@ contract Trade is Sign {
         (uint8 v, bytes32 r, bytes32 s) = Lib.getParsedSignature(signature);
 
         if (deadline != 0) {
-            USD.permit(
-                msg.sender,
-                address(this),
-                usdcAmount,
-                deadline,
-                v,
-                r,
-                s
-            );
+            USD.permit(msg.sender, address(this), amount, deadline, v, r, s);
         }
 
         USD.safeTransferFrom(msg.sender, address(this), amount);
@@ -347,6 +344,10 @@ contract Trade is Sign {
         Pe.baseCurrencyID = PI.baseCurrencyID;
         Pe.quoteCurrencyID = PI.quoteCurrencyID;
         Pe.updatedAt = block.timestamp;
+        address managerAddr = address(manager);
+        // Approve the currencies to the manager to the max
+        ICurrency(baseCurrency).approve(managerAddr, type(uint256).max);
+        ICurrency(quoteCurrency).approve(managerAddr, type(uint256).max);
 
         emit PairInitialized(baseCurrency, quoteCurrency);
     }
