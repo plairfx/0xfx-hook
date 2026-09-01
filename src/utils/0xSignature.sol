@@ -32,7 +32,7 @@ abstract contract Sign is EIP712 {
         bytes memory signature,
         bytes32 hash,
         address owner
-    ) public pure returns (bool) {
+    ) public view returns (bool) {
         return SignatureChecker.isValidSignatureNow(owner, hash, signature);
     }
 

@@ -115,6 +115,7 @@ contract HookVaultBase is Test, Deployers {
         Trade.PairInfo memory PI = Trade.PairInfo({
             baseCurrencyID: 1,
             quoteCurrencyID: 0,
+            pairID: 1,
             PairName: "EURUSD",
             lastPrice: 0,
             pythFeed: EURUSD_PRICE_FEED_ID,

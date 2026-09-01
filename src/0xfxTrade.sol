@@ -1,24 +1,32 @@
 // SPDX-License-Identifier: MIT
 
+pragma solidity ^0.8.22;
+
 import {IOracle} from "./interfaces/IOracle.sol";
+import {IStorage} from "./interfaces/I0xfxStorage.sol";
 import {ICurrencyVault} from "./interfaces/ICurrencyVault.sol";
 import {Lib} from "./utils/0xLib.sol";
 import {PythStructs} from "./interfaces/Pyth/IPyth.sol";
-import {Heap} from "@openzeppelin/contracts/utils/structs/Heap.sol";
+
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
+import {
+    Currency,
+    CurrencyLibrary
+} from "@uniswap/v4-core/src/types/Currency.sol";
 import {Sign} from "./utils/0xSignature.sol";
-
-pragma solidity ^0.8.22;
 
 contract Trade is Sign {
     IOracle oracle;
     ICurrencyVault cv;
+    IStorage store;
+    using CurrencyLibrary for Currency;
 
     struct PairInfo {
         uint256 baseCurrencyID;
         uint256 quoteCurrencyID;
+        uint256 pairID;
         string PairName;
         // PoolKey pk; // add this later.
         uint256 lastPrice;
@@ -40,6 +48,14 @@ contract Trade is Sign {
         uint256 entryTime;
     }
 
+    struct UserInfo {
+        uint256 balance;
+        uint256 leverage;
+        uint256 equity;
+        uint256 freeMargin;
+        uint256 margin;
+    }
+
     // liquidity?
     event LimitPlaced();
     address owner;
@@ -57,8 +73,8 @@ contract Trade is Sign {
     }
     uint24 tickLength = 20;
 
-    mapping(uint256 pairID => mapping(int24 tick => mapping(int24 tickRange => Heap.Uint256Heap))) priceInfo;
     mapping(uint256 oid => TradeInfo) tradeInfo;
+    mapping(address user => UserInfo) userInfo;
     // So lets assume
 
     mapping(address => mapping(address => PairInfo)) pairInfo;
@@ -69,109 +85,35 @@ contract Trade is Sign {
         cv = ICurrencyVault(_cv);
     }
 
-    // check if any liquidity is avaliable before a trade happens:
-    // - check if pair is open.
-    // - Check user's liquidity/balance and see if he has enough
-    // - Check liquidity.
-    // - Dpeending on the trade type,
-
-    // - Market Trade:
-    // - check Liq & free Margin.
-    // - Swap using the hook liquidity on the open market,
-    // - Execute the trade -> Liquidity used will also be swapped with it, and hold in that if sell EUR ->  USD will be bought.
-    // - User will have  less free margin, adn the trade will be opened with a potential TP,SL or others what the user has et.
-
-    // - Limit Trade:
-    // - check Free margin:
-    // -  put it into limit mapping
-    // - Hook beforeSwap calls to see what trade are valid to be executed at the price (Liq check , free margin check).
-    // - Executes all trades  and swap ofc.
-
-    // - Stoploss:
-    // - BeforeSwap checks if any of the pairPrice is at a stoploss for a user,
-    // - Calls closeTrade on an order with a privileged function.
-    // - Trades get closed and user margin PNL and balance etc will get edited.
-
-    // - TakeProfit
-    // - BeforeSwap checks fi any pairPrice is close to a takeProfit.
-    // - Calls CLosePosition on an position.
-    // - Trades get closed and userInfo gets edited PNL etc.
-
-    // - Liquidation:
-    // - Whenever an user  freeMargin is in the minus or .
-    // - BeforeSwap checks to see if any user users positio is liquidateable? ( this one we will need to go into more later).
-    // - Positions get closed until an USER IS NOT underwater anymore.
-
-    // @important:
-    // Think about examples such as USD LONG, what does our vault do with the liquiidity used from the vault?
-    // How will we treat limt orde rprices that have already been crossed? with the price update.
-    // Add @signatures, so that the trading experience will already be nice, with the EIP712 + ECDSA with the other EIPS. (Signature EOA ETC).
-
-    // Heaps
-    // just have to see and understand how like, multiple heaps woiuld workout.
-
-    //BEcause they would, work out ina  sense,
-
-    //Verify if a trade is valid and possible
-
-    // Execute swap,
-
-    //AfterSwap checks if another trade is possible.
-
-    //But with the heaps, if we have multiple heaps, how would search through all of them?TIck Price - Change in Price, is the price we want to search for. This would be all the heaps
-
-    //mapping(tickprice=> Heap) heaps;
-
-    //if we want to search an heap heap[tickPrice], but if the price change is 50 ticks, it will be 50 heaps to search for..
-
-    // We need to group ticks together, in sense where we have to leap through as least as possible heaps. THis will make everything
-    // Understanding this is the priority: What is a valid tickRange we can swipe through?
-    // Without making too much of a thing, if an heap is empty we go through the next.
-    // This will workout, for sure.
-
-    // can only be the HOOK!
     function afterTrade(
         int24 tick,
         uint160 sqrtPricex96,
         PoolKey calldata key
     ) external {
-        // int24 tick:
-        // sqrtPricex96:
-        // calculate the tickRange..
-        // tickRange ->  betwene tickrange.
-        // get the max range to the upperTick, and the min range down tot he lowerTick;
-        // With this we are able to -> write
-        // Limit Order..
-        // Limit order comes in, at 1535, but the tickprice is 1536,
-        // If the price goes to 1535, but the limit is registered at 1535?
-        // How do we make sure the user still get executed in this example?
-        //  We check the lower ranges aswell to see if there are orders registered at those prices.
-        // SO lets say there is a 1535 limit order at the tickRange 10 which is 1534.5,
-        // this si normally, but we will go into the both
-        // higher and lower tick ranges and mkae sure they are executed.
-        // In this case we have a preference towardst he currentTick.
-        // We wil both get three values, of the tickrange between the sqrtPricex96 we have.
-        // Whenever a trade is ranged towards we will pick the earliest trade set and execute that first.
-        // TickRange 1535,
-        // we will take 1533 t/m 1536, but depending ont he rpice really,
-        // depended on the price which is set by the user.
-        // SqrtPriceX96 = 1.16500 is between 1534 and 1535
-        // TickRange = 1535
-        // CurrentSQRTPRICEX96 = 1.16500 // gett he tickrange
-        // getMappingInfo, Earliest order from the heap + previous tick heap that also has orders there.
-        // Goal= finish the logic of limit order/stoploss/take profit/
-        // These 4 should be very smiliar in terms of logic as they are the orders hat need to be executed.
-        // Situation:
-        // We have 3 orders:
-        // Limit order 1534: tickRange: 1 of 10. last
-        // Stoploss at 1534: tickrange 9 of 10. eseond earlierst
-        // Limit order 1534: tickrange 9 of 10. Earliest BUY
-        // Price goes to 1533 tickrange 8/10  ->
-        // Execute limit Order, that are buys -> so tick + price range, and execute the earliest of them all.
-        // Dpeendig on the price omvement it might get a lot of tick ranges,
-        // FIrst we get the tickRange, currently
-        // bool short; // we need to get the right order for this aswell tbh.
-        // getTickRange(sqrtPriceX96, short);
+        // Liquidaiton will be implemented later on..
+
+        // we convert to a tickRange
+        // @Important get a more logically approach for the tickRange..
+        uint256 pairID = pairInfo[Currency.unwrap(key.currency0)][
+            Currency.unwrap(key.currency0)
+        ].pairID;
+        (int24 userTick, int24 tickrange) = getTickRange(sqrtPricex96, false);
+        uint256 oidToExecute;
+        try store.getFirstOrderOut(pairID, tick, tickrange) {
+            // check user's margin..
+            TradeInfo memory TI = tradeInfo[oidToExecute];
+            if (doesUserHaveEnoughMargin(TI.user)) {
+                oidToExecute = store.popFirstOrder(pairID, tick, tickrange);
+            } else {
+                return;
+            }
+        } catch {
+            return;
+        }
+
+        // check if the vault has enough liquidity to execute...
+
+        // execute the swap.
     }
 
     // MarketOrder
@@ -187,6 +129,7 @@ contract Trade is Sign {
             "Invalid Signature/Signer"
         );
         // Check if user has enough USDC deposited.
+        // for this we have an expectation of the same margin.
 
         if (TR.orderType == 0 || TR.orderType == 1) {
             orderID++;
@@ -199,6 +142,7 @@ contract Trade is Sign {
                     TR.orderType == 0)
             ) {
                 // marketOrder..
+                // check if user has enough margin...
             } else {
                 // limit Order..
                 (int24 tick, int24 tickRange) = getTickRange(
@@ -206,10 +150,7 @@ contract Trade is Sign {
                     TR.short
                 );
 
-                Heap.Uint256Heap storage H = priceInfo[TR.pairID][tick][
-                    tickRange
-                ];
-                Heap.insert(H, orderID);
+                store.insertOrder(TR.pairID, tick, tickRange, orderID);
 
                 uint256 margin;
                 tradeInfo[orderID] = TradeInfo({
@@ -227,19 +168,14 @@ contract Trade is Sign {
 
                 emit LimitPlaced();
             }
-
-            // we will add the forex ufnctionallity later,
-            // now we add the orderkeeping firs
-
-            // add logic of the mapping etc.
-
-            // whenever a trade happens, we make sure we execute it between these ranges aswell..
-
-            // so if a tick moves 1 up, -> we will execute the first, and see if the others are in range..
         } else if (TR.orderType == 2 || TR.orderType == 3) {
             // cancel order && modifyOrder
         } else {
             // modifyPosition & closePosition.
+            // whenever a modifyPosition or closePosition happens,
+            // we expect some swap to happen depending on the vault.
+            // As we have not figured out the Vault and uuh logic of the liquidaiton etc..
+            // WE are going to keep it a basic template ->
         }
     }
 
@@ -335,6 +271,25 @@ contract Trade is Sign {
 
     function checkOwner() internal view returns (bool) {
         return owner == msg.sender;
+    }
+
+    function doesUserHaveEnoughMargin(
+        address user
+    ) internal view returns (bool) {
+        // get the outputs for multiple prices?
+        // we need prices of all pairs, for now we start is EURUSD
+        // swapMath.computeSwapStep,
+        // calculate the price by simply doing a math formula and get the currentPrice
+        // lotsize * price, and we have our currentMargin of  a position
+        // calculate users pnl positions
+        // see if user has enough Margin and done..
+        // we cna already compute hte prices of everything, we simply already get all our prices..
+    }
+
+    function getMargin() internal view returns (uint256) {}
+
+    function getPNL() internal view returns (int256) {
+        // the same it uses info from swapMath etc.
     }
 
     function getPairInfo(
