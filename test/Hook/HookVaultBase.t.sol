@@ -66,7 +66,7 @@ contract HookVaultBase is Test, Deployers {
         oracle = new Oracle(address(pyth));
         CurrencyVault.CurrencyInfo memory CI = CurrencyVault.CurrencyInfo({
             currencyID: 0,
-            currencyName: "USD DOLLAR", // this is what i guess makes it bigger? // for now i amke this smaller, as we want this to be smaller>>
+            currencyName: "USD DOLLAR",
             currencyCode: "USD",
             currencyAddr: address(0x0),
             pythFeedID: bytes32(0),

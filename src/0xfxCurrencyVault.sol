@@ -1,5 +1,7 @@
 // SDPX-License-Identifier: MIT
 
+pragma solidity ^0.8.22;
+
 import {CurrencyFX} from "./0xfxCurrency.sol";
 import {ICurrency} from "./interfaces/ICurrency.sol";
 import {IPyth, PythStructs} from "./interfaces/Pyth/IPyth.sol";
@@ -14,7 +16,6 @@ import {
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-pragma solidity ^0.8.22;
 contract CurrencyVault is ReentrancyGuardTransient {
     using SafeERC20 for ICurrency;
 
@@ -23,7 +24,6 @@ contract CurrencyVault is ReentrancyGuardTransient {
 
     address owner;
     address immutable USDC;
-    uint256 valid_time_distance = 60; // 60seconds..
 
     struct CurrencyInfo {
         uint256 currencyID;
@@ -36,6 +36,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         bool active;
     }
 
+    uint256 valid_time_distance = 60; // 60seconds..
     mapping(uint256 currencyID => CurrencyInfo) currencies;
     mapping(address => uint256 currencyID) currencyIdInfo;
 
@@ -57,7 +58,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         _;
     }
 
-    /// @notice initializes the pyth oracle, usdc and owner.
+    /// @notice initializes the pyth oracle, usdc ,owner and  USD currencyID[0]
     constructor(
         address _oracle,
         address usdc,

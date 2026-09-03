@@ -1,8 +1,8 @@
 // SDPX-License-Identifier: MIT
 
-import {IPyth, PythStructs} from "./interfaces/Pyth/IPyth.sol";
-
 pragma solidity ^0.8.22;
+
+import {IPyth, PythStructs} from "./interfaces/Pyth/IPyth.sol";
 
 contract Oracle {
     IPyth pyth;
@@ -11,6 +11,7 @@ contract Oracle {
         pyth = IPyth(_pyth);
     }
 
+    /// @notice gets currentPrice from the pythOracle
     function getCurrentPrice(
         bytes32 feedID,
         uint256 validTimeDistance

@@ -46,21 +46,18 @@ contract Trade is AccessControl, Sign {
     using PoolIdLibrary for PoolKey;
     using SafeERC20 for ICurrency;
 
-    bytes32 constant HOOK_ROLE = keccak256("hook");
-    bytes32 constant OWNER_ROLE = keccak256("owner");
     struct PairInfo {
         uint256 baseCurrencyID;
         uint256 quoteCurrencyID;
         uint256 pairID;
         string PairName;
-        PoolKey pk; // add this later.
+        PoolKey pk;
         uint256 lastPrice;
         bytes32 pythFeed;
         uint256 updatedAt;
         bool active;
     }
 
-    bytes constant ZERO_BYTES = new bytes(0);
     struct TradeInfo {
         uint256 oid;
         uint256 pairID;
@@ -81,8 +78,18 @@ contract Trade is AccessControl, Sign {
         uint256 freeMargin;
         uint256 margin;
     }
+    bytes32 constant HOOK_ROLE = keccak256("hook");
+    bytes32 constant OWNER_ROLE = keccak256("owner");
+    bytes constant ZERO_BYTES = new bytes(0);
+    uint24 tickLength = 20;
+    uint256 lastTickPrice;
+    uint256 orderID;
 
-    // liquidity?
+    mapping(uint256 oid => TradeInfo) tradeInfo;
+    mapping(address user => UserInfo) userInfo;
+    mapping(address => mapping(address => PairInfo)) pairInfo;
+    mapping(uint256 pairID => PairInfo) pairInfoID;
+
     event LimitPlaced();
 
     event Deposited(
@@ -91,24 +98,10 @@ contract Trade is AccessControl, Sign {
         uint256 amount
     );
 
-    event Test(uint256, uint256);
-
-    uint256 lastTickPrice;
-    uint256 orderID;
-
     event PairInitialized(
         address indexed baseCurrency,
         address indexed quoteCurrency
     );
-
-    uint24 tickLength = 20;
-
-    mapping(uint256 oid => TradeInfo) tradeInfo;
-    mapping(address user => UserInfo) userInfo;
-    // So lets assume
-
-    mapping(address => mapping(address => PairInfo)) pairInfo;
-    mapping(uint256 pairID => PairInfo) pairInfoID;
 
     constructor(
         address _oracle,
@@ -127,6 +120,11 @@ contract Trade is AccessControl, Sign {
         manager = IPoolManager(_manager);
     }
 
+    /// @notice allows the afterSwap Hook to call this funciton to execute any open trades within the given price
+    /// @dev function only executes one order in the aftertrade function
+    /// @param tick tick provided by the Hook contract which is the current tick.
+    /// @param sqrtPricex96 current provided by the Hook Contract
+    /// @param key provided by the hook contract which is the specific pool key.
     function afterTrade(
         int24 tick,
         uint160 sqrtPricex96,
@@ -139,7 +137,7 @@ contract Trade is AccessControl, Sign {
         TradeInfo memory TI;
 
         try store.getFirstOrderOut(pairID, tick, tickrange) {
-            // check user's margin..-259196
+            // check user's margin..
             TI = tradeInfo[oidToExecute];
             if (doesUserHaveEnoughMargin(TI.user)) {
                 oidToExecute = store.popFirstOrder(pairID, tick, tickrange);
@@ -166,7 +164,7 @@ contract Trade is AccessControl, Sign {
         // Else  example: Lotsize * c1In(1.17570).
         // int amountSpecified = int256(TI.lotSize) *
         //     int256((TI.short ? 1e6 : c1In));
-        // emit Test(uint(amountSpecified), 0);
+
         // hardcode the amount..
         BalanceDelta BD = hook.swap(
             key,
@@ -194,6 +192,7 @@ contract Trade is AccessControl, Sign {
         );
     }
 
+    /// @notice function allows user to deposit USD to trade.
     function depositUSD(
         address receiver,
         uint256 amount,
@@ -222,12 +221,9 @@ contract Trade is AccessControl, Sign {
         emit Deposited(msg.sender, msg.sender, amount);
     }
 
-    // MarketOrder
-    // Limit Order
-    // CancelOrder
-    // ModifyOrdr
-    // ModifyPosition
-    // Close Position
+    /// @notice allows user to trade.
+    /// @dev this funciton inserts orders which are pending into the Heap (check Storage Contract)
+    /// the tickRange which the order is submitted in is vital.
     function trade(TradeRequest memory TR, bytes memory signature) external {
         // VerifySignature first.
         // require(
@@ -281,10 +277,15 @@ contract Trade is AccessControl, Sign {
             // whenever a modifyPosition or closePosition happens,
             // we expect some swap to happen depending on the vault.
             // As we have not figured out the Vault and uuh logic of the liquidaiton etc..
-            // WE are going to keep it a basic template ->
         }
     }
 
+    /// @notice this function calculates the tickrange for any pending order
+    /// @dev this range returns tick and a tickRange for the order to be put into
+    /// the tickRange is a simply ''tick'' based upon the tickInterval, which allows the protocol
+    /// to safely execute orders more accurately whenever an order is between a range
+    // it will pinpoint it to the higher tickRange.
+    // ^Short higher price,  lower for a long.
     function getTickRange(
         uint160 sqrtPriceX96,
         bool short
@@ -309,6 +310,8 @@ contract Trade is AccessControl, Sign {
         );
     }
 
+    /// @notice inits a pair for trades.
+    /// @dev if this is not enabled the hook cannot initializes a pair.
     function initializePair(
         PairInfo memory PI,
         address baseCurrency,
@@ -351,7 +354,6 @@ contract Trade is AccessControl, Sign {
         hook = IHook(_hook);
     }
 
-    // @fix initPairKeyID funciton
     function initPairKeyID(
         address baseCurrency,
         address quoteCurrency,

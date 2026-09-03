@@ -63,20 +63,6 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     mapping(address => uint256) withdrawalCooldown;
     bytes constant ZERO_BYTES2 = new bytes(0);
 
-    constructor(
-        IPoolManager _IPM,
-        address _USDC,
-        address _owner,
-        address _currencyVault,
-        address _trade
-    ) BaseHook(_IPM) ERC20("0xfx Liquidity Token", "0xfxLT") {
-        USDC = ICurrency(address(_USDC));
-        owner = _owner;
-        ICV = ICurrencyVault(_currencyVault);
-        IT = ITrade(_trade);
-    }
-
-    // approve maxUint256 for all pairs approved, in this contract.
     uint256 immutable MAX_DEPOSIT_COOLDOWN = 30 days;
     uint256 currentDepositCoolDown = 3 days;
 
@@ -107,6 +93,21 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         _;
     }
 
+    /// @dev sets address for PM, etc.
+    constructor(
+        IPoolManager _IPM,
+        address _USDC,
+        address _owner,
+        address _currencyVault,
+        address _trade
+    ) BaseHook(_IPM) ERC20("0xfx Liquidity Token", "0xfxLT") {
+        USDC = ICurrency(address(_USDC));
+        owner = _owner;
+        ICV = ICurrencyVault(_currencyVault);
+        IT = ITrade(_trade);
+    }
+
+    /// @notice allows the tradeContract to swap through the hook contract (AfterSwap HOOK).
     function swap(
         PoolKey memory key,
         SwapParams memory params,
@@ -143,6 +144,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         return bd;
     }
 
+    /// @notice allows Liquidity providers to deposit USDC to faciliate the protocol.
     function deposit(
         uint256 usdcAmount,
         uint256 deadline,
@@ -183,7 +185,6 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
     // allows user to claim their LP +/+-PNL.
     // The user will need to wait for the cooldown period to expire,
     // this is made incase the period is too long for the user..
-
     function withdraw(
         uint256 shareAmount,
         address receiver
@@ -207,7 +208,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         emit Withdrawn(msg.sender, receiver, _assets);
     }
 
-    // add @access control.
+    /// @notice allows owner to change the cooldown period for withdraws.
     function changeCooldownPeriod(uint256 newCDPeriod) external onlyOwner {
         require(
             MAX_DEPOSIT_COOLDOWN >= newCDPeriod,
@@ -256,33 +257,8 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         return USDC.decimals();
     }
 
-    function _convertToAssets(uint256 _shares) internal view returns (uint256) {
-        return (_shares * totalAssets()) / totalSupply();
-    }
-
-    function _convertToShares(uint256 _assets) internal view returns (uint256) {
-        return
-            totalSupply() == 0
-                ? _assets
-                : (_assets * totalSupply()) / totalAssets();
-    }
-
-    function previewMint(uint256 _shares) public view returns (uint256) {
-        return totalSupply() == 0 ? _shares : _convertToAssets(_shares);
-    }
-
-    function previewRedeem(uint256 _shares) public view returns (uint256) {
-        return totalSupply() == 0 ? 0 : _convertToAssets(_shares);
-    }
-
-    function previewDeposit(uint256 _assets) public view returns (uint256) {
-        return _convertToShares(_assets);
-    }
-
-    function isOwner(address _user) public view returns (bool) {
-        return _user == owner;
-    }
-
+    /// @dev this function is called after every swap whenever a swap is iniated,
+    // _afterSwap calls afterTrade function in the tradeContract to initiate any pending orders for the trading platform.
     function _afterSwap(
         address,
         PoolKey calldata key,
@@ -301,6 +277,8 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         selector_ = IHooks.afterSwap.selector;
     }
 
+    /// @dev this function makes sure that no pair or currency not created by the protocol is accepted with this hook.
+    // _afterSwap calls afterTrade function in the tradeContract to initiate any pending orders for the trading platform.
     function _beforeInitialize(
         address sender,
         PoolKey calldata key,
@@ -331,5 +309,32 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         require(P1.active, "Pair not Active");
 
         selector_ = IHooks.beforeInitialize.selector;
+    }
+
+    function _convertToAssets(uint256 _shares) internal view returns (uint256) {
+        return (_shares * totalAssets()) / totalSupply();
+    }
+
+    function _convertToShares(uint256 _assets) internal view returns (uint256) {
+        return
+            totalSupply() == 0
+                ? _assets
+                : (_assets * totalSupply()) / totalAssets();
+    }
+
+    function previewMint(uint256 _shares) public view returns (uint256) {
+        return totalSupply() == 0 ? _shares : _convertToAssets(_shares);
+    }
+
+    function previewRedeem(uint256 _shares) public view returns (uint256) {
+        return totalSupply() == 0 ? 0 : _convertToAssets(_shares);
+    }
+
+    function previewDeposit(uint256 _assets) public view returns (uint256) {
+        return _convertToShares(_assets);
+    }
+
+    function isOwner(address _user) public view returns (bool) {
+        return _user == owner;
     }
 }

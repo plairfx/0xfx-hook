@@ -59,10 +59,6 @@ contract HookVaultTest is HookVaultBase {
         assertGt(USD.balanceOf(owner), USDBalanceBefore);
     }
 
-    //Before swap implemenation:
-    // first we need to work on the Trade contract, but first
-    // lets make sure we are restricting other pools from interacting with this.
-
     function test_SwapExecutesLimitOrders() public {
         vm.startPrank(address(cv));
         USD.mint(100e6, alice);
