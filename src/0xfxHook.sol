@@ -126,7 +126,21 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
             );
         }
 
-        return poolManager.swap(key, params, ZERO_BYTES2);
+        BalanceDelta bd = poolManager.swap(key, params, ZERO_BYTES2);
+
+        poolManager.sync(key.currency0);
+
+        key.currency0.transfer(
+            address(poolManager),
+            uint256(int256(-bd.amount0()))
+        );
+        poolManager.settle();
+        poolManager.take(
+            key.currency1,
+            address(this),
+            uint256(int256(bd.amount1()))
+        );
+        return bd;
     }
 
     function deposit(

@@ -75,10 +75,16 @@ contract HookVaultBase is Test, Deployers {
             active: true
         });
         cv = new CurrencyVault(address(oracle), address(usdc), owner, CI);
-        trade = new Trade(address(oracle), owner, address(cv));
+
         // we will have EUR an
         initializeVaultAndPythEUR();
-
+        trade = new Trade(
+            address(oracle),
+            owner,
+            address(cv),
+            address(USD),
+            address(manager)
+        );
         // testie..
         address hookAddress = address(
             uint160(Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_SWAP_FLAG)

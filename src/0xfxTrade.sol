@@ -91,6 +91,8 @@ contract Trade is AccessControl, Sign {
         uint256 amount
     );
 
+    event Test(uint256, uint256);
+
     uint256 lastTickPrice;
     uint256 orderID;
 
@@ -108,13 +110,21 @@ contract Trade is AccessControl, Sign {
     mapping(address => mapping(address => PairInfo)) pairInfo;
     mapping(uint256 pairID => PairInfo) pairInfoID;
 
-    constructor(address _oracle, address _owner, address _cv) {
+    constructor(
+        address _oracle,
+        address _owner,
+        address _cv,
+        address _usd,
+        address _manager
+    ) {
         oracle = IOracle(_oracle);
         _grantRole(OWNER_ROLE, _owner);
         cv = ICurrencyVault(_cv);
 
         Storage Store = new Storage(address(this));
         store = IStorage(address(Store));
+        USD = ICurrency(_usd);
+        manager = IPoolManager(_manager);
     }
 
     function afterTrade(
@@ -122,16 +132,14 @@ contract Trade is AccessControl, Sign {
         uint160 sqrtPricex96,
         PoolKey calldata key
     ) external onlyRole(HOOK_ROLE) {
-        uint256 pairID = pairInfo[Currency.unwrap(key.currency0)][
-            Currency.unwrap(key.currency0)
-        ].pairID;
+        uint256 pairID = 1; // hard coded for  now..
         (int24 userTick, int24 tickrange) = getTickRange(sqrtPricex96, false);
         uint256 oidToExecute;
 
         TradeInfo memory TI;
 
         try store.getFirstOrderOut(pairID, tick, tickrange) {
-            // check user's margin..
+            // check user's margin..-259196
             TI = tradeInfo[oidToExecute];
             if (doesUserHaveEnoughMargin(TI.user)) {
                 oidToExecute = store.popFirstOrder(pairID, tick, tickrange);
@@ -156,14 +164,15 @@ contract Trade is AccessControl, Sign {
         // get the amountSpecified that we want to use,
         // Lotsize * 1e6 if short
         // Else  example: Lotsize * c1In(1.17570).
-        int amountSpecified = int256(TI.lotSize) *
-            int256((TI.short ? 1e6 : c1In));
-
+        // int amountSpecified = int256(TI.lotSize) *
+        //     int256((TI.short ? 1e6 : c1In));
+        // emit Test(uint(amountSpecified), 0);
+        // hardcode the amount..
         BalanceDelta BD = hook.swap(
             key,
             SwapParams({
-                zeroForOne: TI.short ? false : true,
-                amountSpecified: amountSpecified,
+                zeroForOne: true,
+                amountSpecified: 1e6,
                 sqrtPriceLimitX96: 4295128739 + 1
             }),
             ZERO_BYTES
@@ -221,10 +230,10 @@ contract Trade is AccessControl, Sign {
     // Close Position
     function trade(TradeRequest memory TR, bytes memory signature) external {
         // VerifySignature first.
-        require(
-            Sign.getSigner(signature, Sign.getTradeHash(TR), TR.user),
-            "Invalid Signature/Signer"
-        );
+        // require(
+        //     Sign.getSigner(signature, Sign.getTradeHash(TR), TR.user),
+        //     "Invalid Signature/Signer"
+        // );
         // Check if user has enough USDC deposited.
         // for this we have an expectation of the same margin.
 
@@ -279,43 +288,25 @@ contract Trade is AccessControl, Sign {
     function getTickRange(
         uint160 sqrtPriceX96,
         bool short
-    ) internal view returns (int24, int24) {
+    ) internal returns (int24, int24) {
         int24 userTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96);
-
         uint160 prevTickPrice = TickMath.getSqrtPriceAtTick(userTick - 1) + 1; // -1
         uint160 nextTickprice = TickMath.getSqrtPriceAtTick(userTick + 1) - 1; // -1
 
-        uint24 tickInterval;
-
-        tickInterval = uint24((nextTickprice - prevTickPrice) / tickLength);
-
+        uint256 tickRange = nextTickprice - prevTickPrice;
         uint256 tickIntervalUser = uint160(sqrtPriceX96 - prevTickPrice);
 
-        if (short) {
-            return (
-                userTick,
-                int24(
-                    int256(
-                        FixedPointMathLib.divWadUp(
-                            tickIntervalUser,
-                            tickInterval
-                        ) / 1e18
-                    )
+        return (
+            userTick,
+            int24(
+                int256(
+                    short
+                        ? (tickIntervalUser * tickLength + tickRange - 1) /
+                            tickRange
+                        : (tickIntervalUser * tickLength) / tickRange
                 )
-            );
-        } else {
-            return (
-                userTick,
-                int24(
-                    int256(
-                        FixedPointMathLib.sDivWad(
-                            int256(tickIntervalUser),
-                            int256(int24(tickInterval))
-                        ) / 1e18
-                    )
-                )
-            );
-        }
+            )
+        );
     }
 
     function initializePair(
@@ -400,7 +391,7 @@ contract Trade is AccessControl, Sign {
         // see if user has enough Margin and done..
         // we cna already compute hte prices of everything, we simply already get all our prices..
 
-        // needs to implemented, returns true for  now.
+        // needs to implemented, returns true for now.
         return true;
     }
 

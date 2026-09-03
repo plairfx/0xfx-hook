@@ -8,7 +8,7 @@ contract Storage {
     mapping(uint256 pairID => mapping(int24 tick => mapping(int24 tickRange => Heap.Uint256Heap))) priceInfo;
 
     address trade;
-
+    event Testie(uint256);
     modifier onlyTrade() {
         require(isTrade(msg.sender), "Not the trade addr");
         _;
@@ -25,7 +25,9 @@ contract Storage {
         uint256 orderID
     ) external onlyTrade {
         Heap.Uint256Heap storage H = priceInfo[pairID][tick][tickRange];
+        emit Testie(Heap.length(H));
         Heap.insert(H, orderID);
+        emit Testie(Heap.length(H));
     }
 
     function popFirstOrder(
