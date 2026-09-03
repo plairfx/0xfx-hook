@@ -1,84 +1,75 @@
-
-### 0xfx
-
-
+# 0xfx Atrium Hook
 
 ## Overview
 
-There is a problem right now, matter of facts multiple!
+There's a problem right now — actually, multiple:
 
-- There are not enough different stablecoins (USD, EUR where is the rest??)
-- There is no volume
+- There aren't enough different stablecoins (USD, EUR... where's the rest?)
+- There's no volume
 
+Forex is an industry that has come close to **$10 trillion** in volume per day, while we're currently struggling to even break **$1 billion** in forex perps volume today. That says a lot about where our industry's focus needs to shift: toward stablecoins.
 
-Forex is a industry that has almost peaked close to a 10 trillion volume in a day!..
-While right now we are struggling to even overcome 1 billion volume in forex perps today says a lot about our industry focus 
-towards the stablecoins.
+We could wait for every country to provide a legal pathway for a stablecoin, and then wait for a company trusted enough to back it — but that just won't cut it in the web3 world.
 
-We can wait for every country to provide legal pathway for a stablecoin and afterwards wait for a company trusted enough to cover it,
-but that just won't make it in the web3 world.
+We loved DAI because it was actually backed by a currency we consider "holy."
 
-We loved DAI cause of it being actually backed by a currency we consider holy.
+### Here's where 0xfx comes in
 
-
-Here is where 0xfx comes in:
-
-The simple goal is to open up the world of forex to allow smoothly processing of all of popular FX currencies
+The simple goal: open up the world of forex to enable smooth processing of all popular FX currencies:
 
 - EUR/USD
 - GBP/USD
 - USD/JPY
+- ...and more
 
-and more..
+## Contract Structure
 
-see image.
+The contract consists of:
 
-### Contract Structure:
+- `HookContract`
+- `TradeContract`
+- `VaultContract`
+- `CurrencyVault`
+- `StorageContract`
 
-The Contract exists of:
-- HookContract
-- TradeContract
-- VaultContract
-- CurrencyVault
-- Storage Contract
+---
 
+## How Does It Work?
 
-### How does it work?
+Whenever a user wants to hold a foreign currency (JPY or any other), they can mint it with USDC through the `CurrencyVault` and speculate with it.
 
-Whenever an user wants to hold a foreign currency JPY or any other one, he can mint it with USDC through the currencyVault and speculate with it.
-If the foreign currency rises higher than the deposited USDC, the Hookvault will back it which is deposited with PNL /market making profit and liquidity from liquidity providers.
+If the foreign currency rises higher than the deposited USDC, the `HookVault` backs it — funded by PNL, market-making profit, and liquidity from liquidity providers.
 
-The trading broker/platform is the one bringing in the PNL / marketmaking opportunities, whenever a user swap one of the pairs it will simply interact a afterSwap hook call which will execute any of the pending orders which will bring beautiful loop with no off-chain nodes.
+The trading broker/platform is what brings in the PNL and market-making opportunities. Whenever a user swaps one of the pairs, it simply triggers an `afterSwap` hook call, which executes any pending orders — creating a clean loop with no off-chain nodes.
 
-Depending on the swap amount, the swap will move around the prevTick + 1 and nextTick - 1, the minus and the plus 1 is the case of not reaching the exact tick price, which we will go deeper in a bit.
-
+Depending on the swap amount, the swap will move around `prevTick + 1` and `nextTick - 1`. The `+1`/`-1` accounts for cases where the exact tick price isn't reached — more on this below.
 
 ![alt text](image-1.png)
 
+---
 
-### Uniswap 
-AfterSwap: the afterSwap logic will be called after every swap of a Pool (e.g. EUR/USD), this executes the earliest order of the tickRange and price.
-BeforeInitialize: Whenever a newPool is inted this beforeInit is called to make sure the pool is verified in the Trade Contract.
+## Uniswap Hooks
 
+- **`afterSwap`** — called after every swap on a pool (e.g. EUR/USD). Executes the earliest order within the tick range and price.
+- **`beforeInitialize`** — called whenever a new pool is initialized, to ensure the pool is verified in the `TradeContract`.
 
+---
 
-### Tick Range
-Whenever an user places a pending order think about SL TP, limit etc, the getTickRange function will calculate the tickrange position
-between prevTick price + 1 and nextTickPrice -1 , which will split into 20 tickIntervals.
+## Tick Range
 
-The user will be placed into one of those 20 tickIntervals depending on the his SqrtPricex96 and which side of a trade he chooses.
-(It gets rounded up in his favour!).
+Whenever a user places a pending order (think SL, TP, limit, etc.), the `getTickRange` function calculates the tick range position between `prevTick price + 1` and `nextTick price - 1`, which is split into 20 tick intervals.
+
+The user is placed into one of those 20 tick intervals depending on their `sqrtPriceX96` and which side of the trade they choose. (It's rounded up in their favor!)
 
 ![Tick range example](image.png)
-Blue + red are both in the tickRange.
+*Blue and red are both within the tick range.*
 
+---
 
+## Liquidity Vault
 
-### Liquidity Vault
-The Liquidity vault is an almost sure-way for the user to get a decent guarantee that his currencies will be compensated during a withdraw,
-whenever a user mints his currency through the CurrencyVault he will always be ensured of his USDC deposit.
+The Liquidity Vault gives users a near-guarantee that their currencies will be compensated on withdrawal. Whenever a user mints a currency through the `CurrencyVault`, their USDC deposit is always assured.
 
-Whenever a user trades wins/loses he is in a battle vs the Vault. If the Vault wins the protocol win, as every trading platform the platform has to remain
-mostly profitable.
+When a user trades, they're effectively in a battle against the Vault. If the Vault wins, the protocol wins — as with any trading platform, the platform needs to remain profitable overall.
 
 ![alt text](image-2.png)
