@@ -48,7 +48,7 @@ import {
 import {ICurrency} from "./interfaces/ICurrency.sol";
 import {ICurrencyVault} from "./interfaces/ICurrencyVault.sol";
 import {ITrade} from "./interfaces/I0xfxTrade.sol";
-
+import {Trade} from "./0xfxTrade.sol";
 import {Lib} from "./utils/0xLib.sol";
 
 contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
@@ -58,6 +58,7 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
 
     using SafeERC20 for ICurrency;
     using CurrencyLibrary for Currency;
+    using StateLibrary for IPoolManager;
 
     mapping(address => uint256) withdrawalCooldown;
     bytes constant ZERO_BYTES2 = new bytes(0);
@@ -99,35 +100,32 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         uint256 amount
     );
 
-    event Testie(uint256);
-
     event CooldownPeriodChanged(uint256 oldCD, uint256 newCD);
 
     modifier onlyOwner() {
         require(isOwner(msg.sender), "Not the owner");
         _;
     }
-    // Hook
-    // Vault
-    // - User funds
-    // - Liquidity Vault will be in this hook contract
-    // - Trade ->  and user funds will be in a trade.sol file,
-    // TO make sure to differentirate  between those  assets, as we dont want user funds to get entagled and worry about
-    // We dont even want to have a mishap happening.
-    // this function serves as the basis of the protocol.
-    // We do not want to lose liquidity instantly?
-    // a lockup period? cooldown period...
-
-    // The reasonign behind all of this is ->
-    // Every swap inside the beforeSwap will trigger: Limit orders, Take profits, Stoplosses, and Liquidation.
-    // We stilll have to get and create the contract for that.
 
     function swap(
         PoolKey memory key,
         SwapParams memory params,
         bytes calldata hookData
     ) external returns (BalanceDelta) {
-        // @add access control
+        require(address(IT) == msg.sender, "Not the trade contract");
+
+        if (params.zeroForOne) {
+            ICurrency(Currency.unwrap(key.currency0)).approve(
+                address(poolManager),
+                uint256(params.amountSpecified)
+            );
+        } else {
+            ICurrency(Currency.unwrap(key.currency1)).approve(
+                address(poolManager),
+                uint256(params.amountSpecified)
+            );
+        }
+
         return poolManager.swap(key, params, ZERO_BYTES2);
     }
 
@@ -278,6 +276,14 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
         BalanceDelta,
         bytes calldata
     ) internal override returns (bytes4 selector_, int128) {
+        (
+            uint160 sqrtPriceX96,
+            int24 tick,
+            uint24 protocolFee,
+            uint24 lpFee
+        ) = poolManager.getSlot0(key.toId());
+
+        IT.afterTrade(tick, sqrtPriceX96, key);
         selector_ = IHooks.afterSwap.selector;
     }
 
@@ -305,7 +311,9 @@ contract FxHook is BaseHook, ERC20, ReentrancyGuardTransient {
 
         require(C0.active && C1.active, "Currency not active");
 
-        Lib.PairInfo memory P1 = IT.getPairInfo(currency0, currency1);
+        // put the right pair into the key.
+        IT.initPairKeyID(currency0, currency1, key);
+        Trade.PairInfo memory P1 = IT.getPairInfo(currency0, currency1);
         require(P1.active, "Pair not Active");
 
         selector_ = IHooks.beforeInitialize.selector;

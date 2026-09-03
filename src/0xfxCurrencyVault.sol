@@ -75,6 +75,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         // USDC = ACTIVE
         currencies[0] = C;
         currencies[0].currencyAddr = address(newToken);
+        currencyIdInfo[address(newToken)] = 0;
 
         emit CurrencyInitialized(address(newToken));
     }
@@ -163,6 +164,7 @@ contract CurrencyVault is ReentrancyGuardTransient {
         c.active = true;
 
         currencies[c.currencyID] = c;
+        currencyIdInfo[address(newToken)] = c.currencyID;
 
         emit CurrencyInitialized(address(newToken));
     }

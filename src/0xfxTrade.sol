@@ -29,10 +29,12 @@ import {
     SafeERC20,
     IERC20
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 import {ICurrency} from "./interfaces/ICurrency.sol";
+import {Storage} from "./0xfxStorage.sol";
 
-contract Trade is Sign {
+contract Trade is AccessControl, Sign {
     IOracle oracle;
     ICurrency USD;
     ICurrencyVault cv;
@@ -44,12 +46,14 @@ contract Trade is Sign {
     using PoolIdLibrary for PoolKey;
     using SafeERC20 for ICurrency;
 
+    bytes32 constant HOOK_ROLE = keccak256("hook");
+    bytes32 constant OWNER_ROLE = keccak256("owner");
     struct PairInfo {
         uint256 baseCurrencyID;
         uint256 quoteCurrencyID;
         uint256 pairID;
         string PairName;
-        // PoolKey pk; // add this later.
+        PoolKey pk; // add this later.
         uint256 lastPrice;
         bytes32 pythFeed;
         uint256 updatedAt;
@@ -86,7 +90,7 @@ contract Trade is Sign {
         address indexed receiver,
         uint256 amount
     );
-    address owner;
+
     uint256 lastTickPrice;
     uint256 orderID;
 
@@ -95,10 +99,6 @@ contract Trade is Sign {
         address indexed quoteCurrency
     );
 
-    modifier onlyOwner() {
-        require(checkOwner(), "Not the owner");
-        _;
-    }
     uint24 tickLength = 20;
 
     mapping(uint256 oid => TradeInfo) tradeInfo;
@@ -106,28 +106,30 @@ contract Trade is Sign {
     // So lets assume
 
     mapping(address => mapping(address => PairInfo)) pairInfo;
+    mapping(uint256 pairID => PairInfo) pairInfoID;
 
     constructor(address _oracle, address _owner, address _cv) {
         oracle = IOracle(_oracle);
-        owner = _owner;
+        _grantRole(OWNER_ROLE, _owner);
         cv = ICurrencyVault(_cv);
+
+        Storage Store = new Storage(address(this));
+        store = IStorage(address(Store));
     }
 
     function afterTrade(
         int24 tick,
         uint160 sqrtPricex96,
         PoolKey calldata key
-    ) external {
-        // Liquidaiton will be implemented later on..
-
-        // we convert to a tickRange
-        // @Important get a more logically approach for the tickRange..
+    ) external onlyRole(HOOK_ROLE) {
         uint256 pairID = pairInfo[Currency.unwrap(key.currency0)][
             Currency.unwrap(key.currency0)
         ].pairID;
         (int24 userTick, int24 tickrange) = getTickRange(sqrtPricex96, false);
         uint256 oidToExecute;
+
         TradeInfo memory TI;
+
         try store.getFirstOrderOut(pairID, tick, tickrange) {
             // check user's margin..
             TI = tradeInfo[oidToExecute];
@@ -143,7 +145,6 @@ contract Trade is Sign {
 
         // get the expected price, without any fees
         // to calculate the currentPrice of the lotSize calculation.
-
         (, uint256 c0out, uint256 c1In, ) = SwapMath.computeSwapStep({
             sqrtPriceCurrentX96: sqrtPricex96,
             sqrtPriceTargetX96: 4295128739 + 1,
@@ -229,8 +230,8 @@ contract Trade is Sign {
 
         if (TR.orderType == 0 || TR.orderType == 1) {
             orderID++;
-
-            (uint160 currentSqrtPricex96, , , ) = getSlot0Info(TR.pairID);
+            PoolId ID = pairInfoID[TR.pairID].pk.toId();
+            (uint160 currentSqrtPricex96, , , ) = manager.getSlot0(ID);
 
             if (
                 (currentSqrtPricex96 >= TR.ENTRY_sqrtPriceX96 && !TR.short) ||
@@ -321,7 +322,7 @@ contract Trade is Sign {
         PairInfo memory PI,
         address baseCurrency,
         address quoteCurrency
-    ) external {
+    ) external onlyRole(OWNER_ROLE) {
         require(
             !pairInfo[baseCurrency][quoteCurrency].active &&
                 !pairInfo[quoteCurrency][baseCurrency].active,
@@ -344,12 +345,30 @@ contract Trade is Sign {
         Pe.baseCurrencyID = PI.baseCurrencyID;
         Pe.quoteCurrencyID = PI.quoteCurrencyID;
         Pe.updatedAt = block.timestamp;
+        Pe.pk = PI.pk;
         address managerAddr = address(manager);
+
+        pairInfoID[PI.pairID] = Pe;
         // Approve the currencies to the manager to the max
-        ICurrency(baseCurrency).approve(managerAddr, type(uint256).max);
-        ICurrency(quoteCurrency).approve(managerAddr, type(uint256).max);
 
         emit PairInitialized(baseCurrency, quoteCurrency);
+    }
+
+    function initHookRole(address _hook) external onlyRole(OWNER_ROLE) {
+        require(address(hook) == address(0x0), "Already intialized hook");
+        _grantRole(HOOK_ROLE, _hook);
+        hook = IHook(_hook);
+    }
+
+    // @fix initPairKeyID funciton
+    function initPairKeyID(
+        address baseCurrency,
+        address quoteCurrency,
+        PoolKey calldata key
+    ) external onlyRole(HOOK_ROLE) {
+        PairInfo memory PI = pairInfo[baseCurrency][quoteCurrency];
+        pairInfo[baseCurrency][quoteCurrency].pk = key;
+        pairInfoID[PI.pairID].pk = key;
     }
 
     function getCurrentPrice(
@@ -369,10 +388,6 @@ contract Trade is Sign {
         // so if its  a short it will be +  and - for the short.
     }
 
-    function checkOwner() internal view returns (bool) {
-        return owner == msg.sender;
-    }
-
     function doesUserHaveEnoughMargin(
         address user
     ) internal view returns (bool) {
@@ -384,33 +399,19 @@ contract Trade is Sign {
         // calculate users pnl positions
         // see if user has enough Margin and done..
         // we cna already compute hte prices of everything, we simply already get all our prices..
+
+        // needs to implemented, returns true for  now.
+        return true;
     }
 
     function getMargin() internal view returns (uint256) {}
 
-    function getPNL() internal view returns (int256) {
-        // the same it uses info from swapMath etc.
-    }
+    function getPNL() internal view returns (int256) {}
 
     function getPairInfo(
         address currency0,
         address currency1
     ) public view returns (PairInfo memory) {
         return pairInfo[currency0][currency1];
-    }
-
-    function getSlot0Info(
-        uint256 pairID
-    )
-        internal
-        view
-        returns (
-            uint160 sqrtPriceX96,
-            int24 tick,
-            uint24 protocolFee,
-            uint24 lpFee
-        )
-    {
-        // call the hookInfo function.
     }
 }

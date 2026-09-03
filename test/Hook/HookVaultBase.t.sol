@@ -15,6 +15,7 @@ import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
 import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {PoolManager} from "v4-core/PoolManager.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
@@ -109,14 +110,25 @@ contract HookVaultBase is Test, Deployers {
             0x0552d275e243b4eE8779aDD4D65528E5b95Adc73
         );
 
-        // initialize Pair inside trade contract
+        console.log(
+            "Testing Currencyinfo",
+            cv.getCurrencyIDInfo(0x8006DD5dd5819d39124aBad41EEE440A3f1C373e)
+        );
+        console.log(
+            "Testing Currencyinfo",
+            cv.getCurrencyIDInfo(0x0552d275e243b4eE8779aDD4D65528E5b95Adc73)
+        );
 
+        // initialize Pair inside trade contract
         vm.startPrank(owner);
+        trade.initHookRole(address(hook));
+
         Trade.PairInfo memory PI = Trade.PairInfo({
             baseCurrencyID: 1,
             quoteCurrencyID: 0,
             pairID: 1,
             PairName: "EURUSD",
+            pk: PoolKey(currency2, currency3, 0, 0, IHooks(address(0x0))),
             lastPrice: 0,
             pythFeed: EURUSD_PRICE_FEED_ID,
             updatedAt: block.timestamp,
@@ -175,6 +187,8 @@ contract HookVaultBase is Test, Deployers {
         uint128 liquidityAfter = manager.getLiquidity(poolId);
 
         console.log("Liquidity After", liquidityAfter);
+
+        // init hook into the trade..
     }
 
     function approveTokens(ICurrency token) public {
